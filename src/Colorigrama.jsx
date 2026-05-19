@@ -798,8 +798,8 @@ export default function Colorigrama() {
               </div>
               <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                 <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Local vs. Foráneas</h3>
-                <ResponsiveContainer width="100%" height={260}>
-                  <PieChart><Pie data={[{name:"Local (MEX)",value:metrics.local},{name:"Foráneas",value:metrics.foranea}]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={95} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} style={{fontSize:11}}>
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart margin={{top:20, right:40, bottom:0, left:40}}><Pie data={[{name:"Local (MEX)",value:metrics.local},{name:"Foráneas",value:metrics.foranea}]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={90} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={true} style={{fontSize:11}}>
                     <Cell fill="#2E7D32"/><Cell fill="#C62828"/>
                   </Pie><Tooltip/><Legend/></PieChart>
                 </ResponsiveContainer>
