@@ -460,24 +460,54 @@ export default function Colorigrama() {
     reader.onload = (evt) => {
       const wb = XLSX.read(evt.target.result, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
+
+      // Detect merged cells to identify sessions with multiple professors.
+      // SheetJS stores merges as [{s:{r,c}, e:{r,c}}] (0-indexed, row 0 = header).
+      // When "Id Sesión" (col 0) is vertically merged, each sub-row is a different professor.
+      const merges = ws["!merges"] || [];
+      const ID_COL = 0; // "Id Sesión" is always column A (index 0)
+      // Map: data-row-index (0-based, after header) -> index of the group leader row
+      const rowToLeader = {};
+      merges.forEach(({ s, e }) => {
+        if (s.c <= ID_COL && e.c >= ID_COL && e.r > s.r) {
+          const leaderData = s.r - 1; // subtract 1 for header row
+          for (let r = s.r; r <= e.r; r++) rowToLeader[r - 1] = leaderData;
+        }
+      });
+
       const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
-      const parsed = json.map(r => ({
-        ...r,
-        _profesor: r["Profesores"] ? String(r["Profesores"]).trim() : "(Vacío)",
-        _sede: r["Sede Sesión"] ? String(r["Sede Sesión"]).trim() : "",
-        _progPadre: r["Programa Padre"] ? String(r["Programa Padre"]).trim() : "",
-        _programa: r["Programa"] ? String(r["Programa"]).trim() : "",
-        _fecha: excelDateToJS(r["Fecha sesión (Día/Mes/Año)"]),
-        _horaInicio: excelTimeToStr(r["Hora inicio"]),
-        _horaFin: excelTimeToStr(r["Hora fin"]),
-      }));
+
+      // Group rows that share the same merged "Id Sesión" cell
+      const groups = {};
+      json.forEach((r, i) => {
+        const leader = rowToLeader[i] !== undefined ? rowToLeader[i] : i;
+        if (!groups[leader]) groups[leader] = { row: r, profs: [] };
+        const p = r["Profesores"] ? String(r["Profesores"]).trim() : "";
+        if (p && !groups[leader].profs.includes(p)) groups[leader].profs.push(p);
+      });
+
+      const parsed = Object.values(groups).map(({ row: r, profs }) => {
+        const profArr = profs.length ? profs : ["(Vacío)"];
+        return {
+          ...r,
+          _profesoresArr: profArr,
+          _profesor: profArr.join(" / "),
+          _sede: r["Sede Sesión"] ? String(r["Sede Sesión"]).trim() : "",
+          _progPadre: r["Programa Padre"] ? String(r["Programa Padre"]).trim() : "",
+          _programa: r["Programa"] ? String(r["Programa"]).trim() : "",
+          _fecha: excelDateToJS(r["Fecha sesión (Día/Mes/Año)"]),
+          _horaInicio: excelTimeToStr(r["Hora inicio"]),
+          _horaFin: excelTimeToStr(r["Hora fin"]),
+        };
+      });
+
       parsed.sort((a,b) => (a._fecha||0) - (b._fecha||0));
       const esc2 = { ...SEDE_PALETTE_DEFAULT }, epc = { ...PROF_PALETTE_DEFAULT }, eprc = { ...PROG_PALETTE_DEFAULT };
       const fb = ["#37474F","#5D4037","#1A237E","#BF360C","#004D40","#33691E","#263238","#F57F17","#880E4F","#311B92"];
       let ci2 = 0;
       parsed.forEach(r => {
         if (r._sede && !esc2[r._sede]) esc2[r._sede] = fb[ci2++ % fb.length];
-        if (r._profesor && !epc[r._profesor]) epc[r._profesor] = fb[ci2++ % fb.length];
+        r._profesoresArr.forEach(p => { if (p && p !== "(Vacío)" && !epc[p]) epc[p] = fb[ci2++ % fb.length]; });
         if (r._progPadre && !eprc[r._progPadre]) eprc[r._progPadre] = fb[ci2++ % fb.length];
       });
       setSedeColors(esc2); setProfColors(epc); setProgColors(eprc);
@@ -501,7 +531,12 @@ export default function Colorigrama() {
     const out = {};
     DISPLAY_COLS.forEach(c => {
       if (["_fecha","_horaInicio","_horaFin","Tema","Caso/Nota","Secuencia","Módulo"].includes(c.key)) return;
-      out[c.key] = [...new Set(rawData.map(r => String(r[c.key] ?? "")))].sort();
+      if (c.key === "_profesor") {
+        // List individual professors, not the combined string
+        out[c.key] = [...new Set(rawData.flatMap(r => r._profesoresArr || [r._profesor]))].sort();
+      } else {
+        out[c.key] = [...new Set(rawData.map(r => String(r[c.key] ?? "")))].sort();
+      }
     });
     return out;
   }, [rawData, DISPLAY_COLS]);
@@ -517,6 +552,8 @@ export default function Colorigrama() {
     if (!rawData) return [];
     let d = rawData.filter(r => Object.entries(filters).every(([k,sel]) => {
       if (!sel || sel.length === 0) return false;
+      // For professor filter, include the session if ANY of its professors is selected
+      if (k === "_profesor") return (r._profesoresArr || [r._profesor]).some(p => sel.includes(p));
       return sel.includes(String(r[k] ?? ""));
     }));
     if (sortCol) {
@@ -536,8 +573,13 @@ export default function Colorigrama() {
     const local = filteredData.filter(r => r._sede === "MEX").length;
     const foranea = total - local;
     const byProf = {}, specialByProf = {}, bySede = {};
-    filteredData.forEach(r => { byProf[r._profesor] = (byProf[r._profesor]||0)+1; bySede[r._sede] = (bySede[r._sede]||0)+1; });
-    filteredData.filter(r => SPECIAL_PROGRAMS.includes(r._progPadre)).forEach(r => { specialByProf[r._profesor] = (specialByProf[r._profesor]||0)+1; });
+    filteredData.forEach(r => {
+      (r._profesoresArr || [r._profesor]).forEach(p => { byProf[p] = (byProf[p]||0)+1; });
+      bySede[r._sede] = (bySede[r._sede]||0)+1;
+    });
+    filteredData.filter(r => SPECIAL_PROGRAMS.includes(r._progPadre)).forEach(r => {
+      (r._profesoresArr || [r._profesor]).forEach(p => { specialByProf[p] = (specialByProf[p]||0)+1; });
+    });
     return { total, local, foranea, byProf, specialByProf, bySede };
   }, [filteredData]);
 
@@ -787,7 +829,15 @@ export default function Colorigrama() {
                         let style = { padding:"8px", borderBottom:"1px solid #f0efea", fontSize:11, maxWidth:c.key==="Tema"||c.key==="Caso/Nota"?220:"auto", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" };
                         if (c.key==="_progPadre"||c.key==="_programa") { const pc=progColors[r._progPadre]||"#999"; style.borderLeft=`4px solid ${pc}`; style.background=`${pc}15`; }
                         if (c.key==="_sede") { const sc=sedeColors[r._sede]||"#999"; style.borderLeft=`4px solid ${sc}`; style.background=`${sc}15`; val=<span style={{display:"flex",alignItems:"center"}}><ColorDot color={sc}/>{val}</span>; }
-                        if (c.key==="_profesor") { const prc=profColors[r._profesor]||"#999"; style.borderLeft=`4px solid ${prc}`; style.background=`${prc}15`; val=<span style={{display:"flex",alignItems:"center"}}><ColorDot color={prc}/>{val}</span>; }
+                        if (c.key==="_profesor") {
+                          const profs = r._profesoresArr || [r._profesor];
+                          const firstColor = profColors[profs[0]] || "#999";
+                          style.borderLeft = `4px solid ${firstColor}`;
+                          style.background = `${firstColor}15`;
+                          val = <span style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                            {profs.map(p => <span key={p} style={{display:"inline-flex",alignItems:"center",whiteSpace:"nowrap"}}><ColorDot color={profColors[p]||"#999"}/>{p}</span>)}
+                          </span>;
+                        }
                         return <td key={c.key} style={style} title={String(c.fmt?c.fmt(r[c.key]):(r[c.key]??""))}>{val}</td>;
                       })}
                     </tr>
