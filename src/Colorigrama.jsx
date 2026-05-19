@@ -448,6 +448,7 @@ export default function Colorigrama() {
   const [showColorPanel, setShowColorPanel] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [filters, setFilters] = useState({});
+  const [dateRange, setDateRange] = useState({ from: "", to: "" });
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
   const [exportStatus, setExportStatus] = useState("");
@@ -511,7 +512,7 @@ export default function Colorigrama() {
         if (r._progPadre && !eprc[r._progPadre]) eprc[r._progPadre] = fb[ci2++ % fb.length];
       });
       setSedeColors(esc2); setProfColors(epc); setProgColors(eprc);
-      setRawData(parsed); setFilters({});
+      setRawData(parsed); setFilters({}); setDateRange({ from: "", to: "" });
     };
     reader.readAsArrayBuffer(file);
   }, []);
@@ -541,6 +542,14 @@ export default function Colorigrama() {
     return out;
   }, [rawData, DISPLAY_COLS]);
 
+  const dateBounds = useMemo(() => {
+    if (!rawData) return { min: "", max: "" };
+    const ts = rawData.map(r => r._fecha?.getTime()).filter(Boolean);
+    if (!ts.length) return { min: "", max: "" };
+    const toISO = t => new Date(t).toISOString().slice(0, 10);
+    return { min: toISO(Math.min(...ts)), max: toISO(Math.max(...ts)) };
+  }, [rawData]);
+
   useEffect(() => {
     if (!rawData) return;
     const init = {};
@@ -556,6 +565,11 @@ export default function Colorigrama() {
       if (k === "_profesor") return (r._profesoresArr || [r._profesor]).some(p => sel.includes(p));
       return sel.includes(String(r[k] ?? ""));
     }));
+    if (dateRange.from || dateRange.to) {
+      const from = dateRange.from ? new Date(dateRange.from).getTime() : -Infinity;
+      const to   = dateRange.to   ? new Date(dateRange.to + "T23:59:59").getTime() : Infinity;
+      d = d.filter(r => r._fecha && r._fecha.getTime() >= from && r._fecha.getTime() <= to);
+    }
     if (sortCol) {
       d = [...d].sort((a,b) => {
         let va = a[sortCol] ?? "", vb = b[sortCol] ?? "";
@@ -740,7 +754,25 @@ export default function Colorigrama() {
           const colDef = DISPLAY_COLS.find(c=>c.key===k);
           return <FilterDropdown key={k} values={vals} selected={filters[k]||[]} onChange={sel=>setFilters(p=>({...p,[k]:sel}))} label={colDef?.label||k} />;
         })}
-        <button onClick={()=>{const init={};Object.entries(filterableValues).forEach(([k,v])=>{init[k]=[...v];});setFilters(init);}} style={{ fontSize:11, padding:"3px 10px", background:IPADE.navy, color:"#fff", border:"none", borderRadius:4, cursor:"pointer", marginLeft:8 }}>
+        {/* Date range picker */}
+        <div style={{ display:"inline-flex", alignItems:"center", gap:4, border:"1px solid #ccc", borderRadius:4, padding:"2px 8px", background: dateRange.from||dateRange.to ? IPADE.gold : "#e8e4dd" }}>
+          <span style={{ fontSize:11, fontWeight:600, color: dateRange.from||dateRange.to ? "#fff" : "#333", whiteSpace:"nowrap" }}>📅 Fecha</span>
+          <input
+            type="date" value={dateRange.from} min={dateBounds.min} max={dateRange.to||dateBounds.max}
+            onChange={e => setDateRange(p => ({ ...p, from: e.target.value }))}
+            style={{ fontSize:11, border:"none", background:"transparent", cursor:"pointer", color: dateRange.from ? "#1B2A4A" : "#888" }}
+          />
+          <span style={{ fontSize:11, color:"#666" }}>—</span>
+          <input
+            type="date" value={dateRange.to} min={dateRange.from||dateBounds.min} max={dateBounds.max}
+            onChange={e => setDateRange(p => ({ ...p, to: e.target.value }))}
+            style={{ fontSize:11, border:"none", background:"transparent", cursor:"pointer", color: dateRange.to ? "#1B2A4A" : "#888" }}
+          />
+          {(dateRange.from||dateRange.to) && (
+            <span onClick={() => setDateRange({ from:"", to:"" })} style={{ fontSize:12, cursor:"pointer", color:"#fff", fontWeight:700, marginLeft:2 }} title="Quitar filtro de fecha">✕</span>
+          )}
+        </div>
+        <button onClick={()=>{const init={};Object.entries(filterableValues).forEach(([k,v])=>{init[k]=[...v];});setFilters(init);setDateRange({from:"",to:"" });}} style={{ fontSize:11, padding:"3px 10px", background:IPADE.navy, color:"#fff", border:"none", borderRadius:4, cursor:"pointer", marginLeft:8 }}>
           Limpiar filtros
         </button>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
