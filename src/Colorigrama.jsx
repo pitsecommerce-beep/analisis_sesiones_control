@@ -24,6 +24,18 @@ const PROG_PALETTE_DEFAULT = {
 };
 const SPECIAL_PROGRAMS = ["InCompany", "Enfocados", "SEPOS"];
 
+/* ── Simulación de Programación ── */
+// Cursos especiales: cuando la columna "Curso" del Excel inicial coincide con
+// alguno de estos valores, la sesión se asigna al profesor configurado en la
+// opción "PROP CF" de la plantilla (independiente del reparto 60/40).
+const SPECIAL_CF_CURSOS = ["PROP CF", "CF", "PROP CF MJ", "FCF", "PROP CF M"];
+const SPECIAL_CF_SET = new Set(SPECIAL_CF_CURSOS.map(s => s.toUpperCase()));
+const PROP_CF_LABEL = "PROP CF";
+const SIM_PROG_PADRE_OPTIONS = ["MEDEX", "Máster", "Perfeccionamiento", "CA"];
+const SIM_CURSO_OPTIONS = ["Contabilidad", "Costos", "Control II", "Riesgos", "Dirección", "Alta Dirección", "Alta Dirección 2"];
+// Reparto del curso: la Dupla imparte el 60% inicial, el Titular el 40% final.
+const DUPLA_SHARE = 0.6;
+
 /* ── helpers ── */
 function excelDateToJS(serial) {
   if (!serial || typeof serial !== "number") return null;
@@ -37,6 +49,13 @@ function excelTimeToStr(t) {
 function fmtDate(d) {
   if (!d) return "";
   return d.toLocaleDateString("es-MX", { day:"2-digit", month:"2-digit", year:"numeric" });
+}
+/* Una sesión cuenta como Virtual si su Modalidad dice "Virtual"
+   o si su Sede Sesión dice "Virtual" / "Vir". */
+function isVirtualSession(r) {
+  const mod = String(r["Modalidad"] ?? "").trim().toLowerCase();
+  const sede = String(r._sede ?? r["Sede Sesión"] ?? "").trim().toLowerCase();
+  return mod === "virtual" || sede === "virtual" || sede === "vir";
 }
 function ColorDot({ color, size = 10 }) {
   return <span style={{ display:"inline-block", width:size, height:size, borderRadius:"50%", backgroundColor:color, marginRight:6, flexShrink:0 }} />;
@@ -101,6 +120,22 @@ function FilterDropdown({ values, selected, onChange, label }) {
         </div>
       )}
     </div>
+  );
+}
+
+/* ── editable text cell (commits on blur / Enter to avoid heavy re-renders) ── */
+function EditableCell({ value, onCommit, style }) {
+  const [v, setV] = useState(value);
+  useEffect(() => { setV(value); }, [value]);
+  return (
+    <input
+      value={v}
+      onChange={e => setV(e.target.value)}
+      onBlur={() => { if (v !== value) onCommit(v); }}
+      onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      style={{ width:"100%", border:"1px solid transparent", background:"transparent", font:"inherit", color:"inherit", padding:"2px 4px", borderRadius:3, ...style }}
+      onFocus={e => { e.target.style.border = "1px solid #C8A951"; e.target.style.background = "#fff"; }}
+    />
   );
 }
 
@@ -438,6 +473,160 @@ function generateColoredExcelBlob(data, sedeColors, profColors, progColors) {
 }
 
 
+/* ══════════════════════════════════════════════════════════
+   MINIMAL XLSX ZIP WRITER (shared, no compression / "store")
+   ══════════════════════════════════════════════════════════ */
+function crc32(data) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) {
+    crc ^= data[i];
+    for (let j = 0; j < 8; j++) crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function buildZip(fileEntries) {
+  const enc = new TextEncoder();
+  const entries = Object.entries(fileEntries).map(([name, content]) => ({
+    name: enc.encode(name), data: enc.encode(content),
+  }));
+  const parts = [], centralDir = [];
+  let offset = 0;
+  entries.forEach(({ name, data }) => {
+    const header = new Uint8Array(30 + name.length);
+    const view = new DataView(header.buffer);
+    view.setUint32(0, 0x04034b50, true); view.setUint16(4, 20, true);
+    view.setUint16(6, 0, true); view.setUint16(8, 0, true);
+    view.setUint16(10, 0, true); view.setUint16(12, 0, true);
+    const crc = crc32(data);
+    view.setUint32(14, crc, true); view.setUint32(18, data.length, true);
+    view.setUint32(22, data.length, true); view.setUint16(26, name.length, true);
+    view.setUint16(28, 0, true); header.set(name, 30);
+    const cd = new Uint8Array(46 + name.length);
+    const cv = new DataView(cd.buffer);
+    cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0, true); cv.setUint16(10, 0, true); cv.setUint16(12, 0, true);
+    cv.setUint16(14, 0, true); cv.setUint32(16, crc, true); cv.setUint32(20, data.length, true);
+    cv.setUint32(24, data.length, true); cv.setUint16(28, name.length, true);
+    cv.setUint16(30, 0, true); cv.setUint16(32, 0, true); cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true); cv.setUint32(38, 0, true); cv.setUint32(42, offset, true);
+    cd.set(name, 46); centralDir.push(cd);
+    parts.push(header, data); offset += header.length + data.length;
+  });
+  const cdOffset = offset;
+  let cdSize = 0;
+  centralDir.forEach(cd => { parts.push(cd); cdSize += cd.length; });
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true); ev.setUint16(4, 0, true); ev.setUint16(6, 0, true);
+  ev.setUint16(8, entries.length, true); ev.setUint16(10, entries.length, true);
+  ev.setUint32(12, cdSize, true); ev.setUint32(16, cdOffset, true); ev.setUint16(20, 0, true);
+  parts.push(eocd);
+  const total = parts.reduce((a, p) => a + p.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  parts.forEach(p => { out.set(p, pos); pos += p.length; });
+  return out;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PLANTILLA DE TITULARIDADES — genera un .xlsx con menús
+   desplegables (data validation) para configurar la simulación.
+   ══════════════════════════════════════════════════════════ */
+function generateTemplateBlob(programIds, professors, existingConfig) {
+  const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const colName = c => { let s = "", n = c; while (n >= 0) { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } return s; };
+
+  const headers = ["Programa Padre", "Curso", "Programa", "Titular", "Dupla"];
+  // Opciones del desplegable de "Programa": todos los IDs únicos + la etiqueta especial PROP CF
+  const programaOpts = [...programIds, PROP_CF_LABEL];
+  const profOpts = [...professors, PROP_CF_LABEL];
+
+  // Filas pre-cargadas: una por cada programa del Excel inicial, más una fila PROP CF.
+  let rows;
+  if (existingConfig && existingConfig.length) {
+    rows = existingConfig.map(c => [c.progPadre || "", c.curso || "", c.programa || "", c.titular || "", c.dupla || ""]);
+  } else {
+    rows = programaOpts.map(id => ["", "", id, "", ""]);
+  }
+  const MAX_ROWS = Math.max(rows.length + 50, 300); // rango amplio para validaciones
+
+  /* ── Hoja 1: Titularidades ── */
+  const cell = (col, rowNum, val, styleAttr = "") => {
+    if (val === "" || val == null) return "";
+    return `<c r="${colName(col)}${rowNum}" t="inlineStr"${styleAttr}><is><t xml:space="preserve">${esc(val)}</t></is></c>`;
+  };
+  let sd1 = `<row r="1">${headers.map((h, i) => cell(i, 1, h, ' s="1"')).join("")}</row>`;
+  rows.forEach((r, ri) => {
+    const rn = ri + 2;
+    sd1 += `<row r="${rn}">${r.map((v, ci) => cell(ci, rn, v)).join("")}</row>`;
+  });
+
+  const dvs = [
+    { sq: `A2:A${MAX_ROWS}`, f: "progPadreList" },
+    { sq: `B2:B${MAX_ROWS}`, f: "cursoList" },
+    { sq: `C2:C${MAX_ROWS}`, f: "programaList" },
+    { sq: `D2:D${MAX_ROWS}`, f: "profList" },
+    { sq: `E2:E${MAX_ROWS}`, f: "profList" },
+  ].map(d => `<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="${d.sq}"><formula1>${d.f}</formula1></dataValidation>`).join("");
+
+  const colsXml1 = [26, 18, 28, 14, 14].map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("");
+  const sheet1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${colsXml1}</cols><sheetData>${sd1}</sheetData><dataValidations count="5">${dvs}</dataValidations></worksheet>`;
+
+  /* ── Hoja 2: Listas (fuente de los desplegables) ── */
+  const listCols = [SIM_PROG_PADRE_OPTIONS, SIM_CURSO_OPTIONS, programaOpts, profOpts];
+  const listHeaders = ["Programa Padre", "Curso", "Programa", "Profesores"];
+  const maxLen = Math.max(...listCols.map(c => c.length));
+  let sd2 = `<row r="1">${listHeaders.map((h, i) => cell(i, 1, h, ' s="1"')).join("")}</row>`;
+  for (let ri = 0; ri < maxLen; ri++) {
+    const rn = ri + 2;
+    const cells = listCols.map((col, ci) => cell(ci, rn, col[ri] ?? "")).join("");
+    if (cells) sd2 += `<row r="${rn}">${cells}</row>`;
+  }
+  const sheet2 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sd2}</sheetData></worksheet>`;
+
+  /* ── Defined names (rangos de las listas) ── */
+  const defNames = `<definedNames>
+    <definedName name="progPadreList">Listas!$A$2:$A$${SIM_PROG_PADRE_OPTIONS.length + 1}</definedName>
+    <definedName name="cursoList">Listas!$B$2:$B$${SIM_CURSO_OPTIONS.length + 1}</definedName>
+    <definedName name="programaList">Listas!$C$2:$C$${programaOpts.length + 1}</definedName>
+    <definedName name="profList">Listas!$D$2:$D$${profOpts.length + 1}</definedName>
+  </definedNames>`;
+
+  const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Titularidades" sheetId="1" r:id="rId1"/><sheet name="Listas" sheetId="2" r:id="rId2"/></sheets>${defNames}</workbook>`;
+
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><color rgb="FF1B2A4A"/><name val="Calibri"/></font><font><sz val="11"/><b/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1B2A4A"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" applyFont="1" applyFill="1"/></cellXfs></styleSheet>`;
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+
+  const xlRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+
+  const files = {
+    "[Content_Types].xml": contentTypes,
+    "_rels/.rels": rels,
+    "xl/_rels/workbook.xml.rels": xlRels,
+    "xl/workbook.xml": workbook,
+    "xl/styles.xml": styles,
+    "xl/worksheets/sheet1.xml": sheet1,
+    "xl/worksheets/sheet2.xml": sheet2,
+  };
+  return new Blob([buildZip(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+/* Reparte una cantidad de sesiones entre Dupla (60% inicial) y Titular (40% final).
+   Devuelve el límite de secuencia (k): secuencia<=k → Dupla, secuencia>k → Titular. */
+function duplaCutoff(maxSec) {
+  return Math.round((Number(maxSec) || 0) * DUPLA_SHARE);
+}
+
 /* ══════════════ MAIN APP ══════════════ */
 export default function Colorigrama() {
   const [rawData, setRawData] = useState(null);
@@ -452,6 +641,15 @@ export default function Colorigrama() {
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
   const [exportStatus, setExportStatus] = useState("");
+  /* ── Simulación de Programación ── */
+  const [simConfig, setSimConfig] = useState([]);   // [{progPadre, curso, programa, titular, dupla}]
+  const [simOverrides, setSimOverrides] = useState({}); // { idSesion: profesorEditadoAMano }
+  const [simFilters, setSimFilters] = useState({});
+  const [simDateRange, setSimDateRange] = useState({ from: "", to: "" });
+  const [simSortCol, setSimSortCol] = useState("_fecha");
+  const [simSortDir, setSimSortDir] = useState("asc");
+  const [simStatus, setSimStatus] = useState("");
+  const simFileRef = useRef();
 
   const handleFile = useCallback((e) => {
     const file = e.target.files[0];
@@ -489,13 +687,21 @@ export default function Colorigrama() {
 
       const parsed = Object.values(groups).map(({ row: r, profs }) => {
         const profArr = profs.length ? profs : ["(Vacío)"];
+        const sede = r["Sede Sesión"] ? String(r["Sede Sesión"]).trim() : "";
+        const programa = r["Programa"] ? String(r["Programa"]).trim() : "";
+        const grupo = r["Grupo"] != null ? String(r["Grupo"]).trim() : "";
         return {
           ...r,
           _profesoresArr: profArr,
           _profesor: profArr.join(" / "),
-          _sede: r["Sede Sesión"] ? String(r["Sede Sesión"]).trim() : "",
+          _sede: sede,
           _progPadre: r["Programa Padre"] ? String(r["Programa Padre"]).trim() : "",
-          _programa: r["Programa"] ? String(r["Programa"]).trim() : "",
+          _programa: programa,
+          _grupo: grupo,
+          // ID por programa = Programa + " " + Sede Sesión + " " + Grupo
+          _idPrograma: `${programa} ${sede} ${grupo}`.replace(/\s+/g, " ").trim(),
+          _curso: r["Curso"] != null ? String(r["Curso"]).trim() : "",
+          _secuencia: Number(r["Secuencia"]) || 0,
           _fecha: excelDateToJS(r["Fecha sesión (Día/Mes/Año)"]),
           _horaInicio: excelTimeToStr(r["Hora inicio"]),
           _horaFin: excelTimeToStr(r["Hora fin"]),
@@ -525,6 +731,18 @@ export default function Colorigrama() {
     { key:"Módulo", label:"Módulo" }, { key:"_fecha", label:"Fecha Sesión", fmt:fmtDate },
     { key:"_horaInicio", label:"Hora inicio" }, { key:"_horaFin", label:"Hora fin" },
     { key:"Tema", label:"Tema" }, { key:"Caso/Nota", label:"Caso/Nota" },
+  ], []);
+
+  // Columnas de la tabla detallada simulada
+  const SIM_COLS = useMemo(() => [
+    { key:"Ciclo", label:"Ciclo" }, { key:"_progPadre", label:"Programa Padre" },
+    { key:"_programa", label:"Programa" }, { key:"_idPrograma", label:"ID Programa" },
+    { key:"_sede", label:"Sede" }, { key:"Modalidad", label:"Modalidad" },
+    { key:"_grupo", label:"Grupo" }, { key:"_curso", label:"Curso" },
+    { key:"_secuencia", label:"Secuencia" }, { key:"_profSim", label:"Profesor (Simulado)" },
+    { key:"_rolSim", label:"Rol" }, { key:"_fecha", label:"Fecha Sesión", fmt:fmtDate },
+    { key:"_horaInicio", label:"Hora inicio" }, { key:"_horaFin", label:"Hora fin" },
+    { key:"Tema", label:"Tema" },
   ], []);
 
   const filterableValues = useMemo(() => {
@@ -584,8 +802,10 @@ export default function Colorigrama() {
   const metrics = useMemo(() => {
     if (!filteredData.length) return null;
     const total = filteredData.length;
-    const local = filteredData.filter(r => r._sede === "MEX").length;
-    const foranea = total - local;
+    // Virtual: sesiones cuya Modalidad es "Virtual" o cuya Sede Sesión es "Virtual"/"Vir"
+    const virtual = filteredData.filter(isVirtualSession).length;
+    const local = filteredData.filter(r => !isVirtualSession(r) && r._sede === "MEX").length;
+    const foranea = total - local - virtual;
     const byProf = {}, specialByProf = {}, bySede = {};
     filteredData.forEach(r => {
       (r._profesoresArr || [r._profesor]).forEach(p => { byProf[p] = (byProf[p]||0)+1; });
@@ -594,12 +814,201 @@ export default function Colorigrama() {
     filteredData.filter(r => SPECIAL_PROGRAMS.includes(r._progPadre)).forEach(r => {
       (r._profesoresArr || [r._profesor]).forEach(p => { specialByProf[p] = (specialByProf[p]||0)+1; });
     });
-    return { total, local, foranea, byProf, specialByProf, bySede };
+    return { total, local, foranea, virtual, byProf, specialByProf, bySede };
   }, [filteredData]);
 
   const sedeChartData = useMemo(() => metrics ? Object.entries(metrics.bySede).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value) : [], [metrics]);
   const profChartData = useMemo(() => metrics ? Object.entries(metrics.byProf).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value) : [], [metrics]);
   const specialChartData = useMemo(() => metrics ? Object.entries(metrics.specialByProf).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value) : [], [metrics]);
+
+  /* ══════════ SIMULACIÓN DE PROGRAMACIÓN ══════════ */
+  // IDs únicos de programa (Programa + " " + Sede Sesión + " " + Grupo) del Excel inicial
+  const programIds = useMemo(() => {
+    if (!rawData) return [];
+    return [...new Set(rawData.map(r => r._idPrograma).filter(Boolean))].sort();
+  }, [rawData]);
+
+  // Lista de profesores únicos del Excel inicial (códigos individuales)
+  const professorsAll = useMemo(() => {
+    if (!rawData) return [];
+    return [...new Set(rawData.flatMap(r => r._profesoresArr || []).filter(p => p && p !== "(Vacío)"))].sort();
+  }, [rawData]);
+
+  // Secuencia máxima (= número de sesiones) por ID de programa
+  const maxSecByProg = useMemo(() => {
+    const m = {};
+    (rawData || []).forEach(r => {
+      const id = r._idPrograma;
+      if (!id) return;
+      if (!(id in m) || r._secuencia > m[id]) m[id] = r._secuencia;
+    });
+    return m;
+  }, [rawData]);
+
+  // Mapa de configuración por ID de programa + profesor especial PROP CF
+  const simLookup = useMemo(() => {
+    const byProg = {};
+    let propCfProf = "";
+    simConfig.forEach(c => {
+      const id = String(c.programa || "").trim();
+      if (!id) return;
+      if (id.toUpperCase() === PROP_CF_LABEL) { propCfProf = String(c.titular || c.dupla || "").trim(); return; }
+      byProg[id] = c;
+    });
+    return { byProg, propCfProf };
+  }, [simConfig]);
+
+  // Resuelve el profesor simulado de una sesión según el reparto 60/40 (o el caso PROP CF).
+  // Si no hay profesor asignado para ese programa, devuelve "" (queda en blanco) para
+  // señalar que todavía hace falta asignarle profesor.
+  const resolveSimProf = useCallback((r) => {
+    if (SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase())) {
+      return { prof: simLookup.propCfProf || "", rol: "PROP CF" };
+    }
+    const cfg = simLookup.byProg[r._idPrograma];
+    if (!cfg) return { prof: "", rol: "" };
+    const k = duplaCutoff(maxSecByProg[r._idPrograma] || 0);
+    const isDupla = r._secuencia <= k;
+    const prof = (isDupla ? cfg.dupla : cfg.titular) || "";
+    return { prof, rol: isDupla ? "Dupla" : "Titular" };
+  }, [simLookup, maxSecByProg]);
+
+  // Sesiones con profesor simulado (respeta ediciones manuales)
+  const simulatedAll = useMemo(() => {
+    if (!rawData) return [];
+    return rawData.map(r => {
+      const { prof, rol } = resolveSimProf(r);
+      const idSes = r["Id Sesión"];
+      const override = simOverrides[idSes];
+      return { ...r, _profSim: override != null ? override : prof, _rolSim: override != null ? "Manual" : rol };
+    });
+  }, [rawData, resolveSimProf, simOverrides]);
+
+  // Valores filtrables para la pestaña de simulación
+  const simFilterableValues = useMemo(() => {
+    if (!simulatedAll.length) return {};
+    const cols = ["_progPadre", "_programa", "_sede", "Modalidad", "_grupo", "_profSim"];
+    const out = {};
+    cols.forEach(k => { out[k] = [...new Set(simulatedAll.map(r => String(r[k] ?? "")))].sort(); });
+    return out;
+  }, [simulatedAll]);
+
+  useEffect(() => {
+    if (!simulatedAll.length) return;
+    const init = {};
+    Object.entries(simFilterableValues).forEach(([k, v]) => { init[k] = [...v]; });
+    setSimFilters(init);
+  }, [simulatedAll.length, simFilterableValues]);
+
+  // Sesiones simuladas filtradas + ordenadas (default: más antiguo → más nuevo)
+  const simFiltered = useMemo(() => {
+    let d = simulatedAll.filter(r => Object.entries(simFilters).every(([k, sel]) => {
+      if (!sel || sel.length === 0) return false;
+      return sel.includes(String(r[k] ?? ""));
+    }));
+    if (simDateRange.from || simDateRange.to) {
+      const from = simDateRange.from ? new Date(simDateRange.from).getTime() : -Infinity;
+      const to = simDateRange.to ? new Date(simDateRange.to + "T23:59:59").getTime() : Infinity;
+      d = d.filter(r => r._fecha && r._fecha.getTime() >= from && r._fecha.getTime() <= to);
+    }
+    const col = simSortCol || "_fecha";
+    d = [...d].sort((a, b) => {
+      let va = a[col] ?? "", vb = b[col] ?? "";
+      if (col === "_fecha") { va = va || new Date(0); vb = vb || new Date(0); return simSortDir === "asc" ? va - vb : vb - va; }
+      va = String(va); vb = String(vb);
+      return simSortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+    return d;
+  }, [simulatedAll, simFilters, simDateRange, simSortCol, simSortDir]);
+
+  // Métricas / datos de gráficos de la simulación
+  const simCharts = useMemo(() => {
+    const byProf = {}, byProfSede = {}, byProfPrograma = {}, sedeSet = new Set(), padreSet = new Set();
+    let local = 0, foranea = 0, virtual = 0;
+    simFiltered.forEach(r => {
+      const p = r._profSim || "(Sin asignar)";
+      byProf[p] = (byProf[p] || 0) + 1;
+      const sede = r._sede || "(Vacío)";
+      sedeSet.add(sede);
+      (byProfSede[p] = byProfSede[p] || {})[sede] = (byProfSede[p][sede] || 0) + 1;
+      const padre = r._progPadre || "(Vacío)";
+      padreSet.add(padre);
+      (byProfPrograma[p] = byProfPrograma[p] || {})[padre] = (byProfPrograma[p][padre] || 0) + 1;
+      if (isVirtualSession(r)) virtual++;
+      else if (r._sede === "MEX") local++;
+      else foranea++;
+    });
+    const profOrder = Object.entries(byProf).sort((a, b) => b[1] - a[1]).map(([p]) => p);
+    const profData = profOrder.map(name => ({ name, value: byProf[name] }));
+    const sedeKeys = [...sedeSet].sort();
+    const padreKeys = [...padreSet].sort();
+    const profSedeData = profOrder.map(p => ({ name: p, ...byProfSede[p] }));
+    const profProgramaData = profOrder.map(p => ({ name: p, ...byProfPrograma[p] }));
+    return { profData, profSedeData, profProgramaData, sedeKeys, padreKeys, local, foranea, virtual, total: simFiltered.length };
+  }, [simFiltered]);
+
+  const simDateBounds = useMemo(() => {
+    if (!simulatedAll.length) return { min: "", max: "" };
+    const ts = simulatedAll.map(r => r._fecha?.getTime()).filter(Boolean);
+    if (!ts.length) return { min: "", max: "" };
+    const toISO = t => new Date(t).toISOString().slice(0, 10);
+    return { min: toISO(Math.min(...ts)), max: toISO(Math.max(...ts)) };
+  }, [simulatedAll]);
+
+  /* Descarga la plantilla de titularidades (.xlsx con desplegables) */
+  const downloadTemplate = useCallback(() => {
+    if (!programIds.length) { setSimStatus("⚠️ Carga primero el Excel inicial"); return; }
+    setSimStatus("Generando plantilla...");
+    try {
+      const blob = generateTemplateBlob(programIds, professorsAll, simConfig);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "Plantilla_Titularidades.xlsx";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSimStatus("✅ Plantilla descargada — llénala y vuelve a cargarla");
+    } catch (e) { console.error(e); setSimStatus("⚠️ Error al generar la plantilla"); }
+    setTimeout(() => setSimStatus(""), 4000);
+  }, [programIds, professorsAll, simConfig]);
+
+  /* Carga la plantilla de titularidades llenada */
+  const handleTemplateUpload = useCallback((e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setSimStatus("Leyendo plantilla...");
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: "array" });
+        const ws = wb.Sheets["Titularidades"] || wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        const norm = s => String(s ?? "").trim();
+        const cfg = json.map(r => ({
+          progPadre: norm(r["Programa Padre"]),
+          curso: norm(r["Curso"]),
+          programa: norm(r["Programa"]),
+          titular: norm(r["Titular"]),
+          dupla: norm(r["Dupla"]),
+        })).filter(c => c.programa);
+        setSimConfig(cfg);
+        setSimOverrides({});
+        setSimStatus(`✅ ${cfg.length} titularidades cargadas`);
+      } catch (err) { console.error(err); setSimStatus("⚠️ No se pudo leer la plantilla"); }
+      setTimeout(() => setSimStatus(""), 4000);
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = "";
+  }, []);
+
+  const updateSimConfigRow = (idx, field, value) => {
+    setSimConfig(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
+  };
+  const addSimConfigRow = () => setSimConfig(prev => [...prev, { progPadre: "", curso: "", programa: "", titular: "", dupla: "" }]);
+  const removeSimConfigRow = (idx) => setSimConfig(prev => prev.filter((_, i) => i !== idx));
+  const handleSimSort = col => {
+    if (simSortCol === col) setSimSortDir(simSortDir === "asc" ? "desc" : "asc");
+    else { setSimSortCol(col); setSimSortDir("asc"); }
+  };
 
   /* ══════ EXPORT: COLORED EXCEL (real .xlsx with cell fills) ══════ */
   const exportExcel = useCallback(() => {
@@ -716,7 +1125,7 @@ export default function Colorigrama() {
 
       {/* TABS */}
       <div style={{ background:IPADE.darkNavy, display:"flex", gap:0, paddingLeft:24 }}>
-        {[["dashboard","📊 Dashboard"],["tabla","📋 Tabla Detallada"]].map(([id,label]) => (
+        {[["dashboard","📊 Dashboard"],["tabla","📋 Tabla Detallada"],["simulacion","🧩 Simulación de Programación"]].map(([id,label]) => (
           <button key={id} onClick={()=>setActiveTab(id)} style={{ padding:"10px 20px", fontSize:13, fontWeight:activeTab===id?700:400, background:activeTab===id?IPADE.offWhite:"transparent", color:activeTab===id?IPADE.navy:"rgba(255,255,255,.6)", border:"none", borderRadius:"8px 8px 0 0", cursor:"pointer" }}>
             {label}
           </button>
@@ -748,6 +1157,7 @@ export default function Colorigrama() {
       )}
 
       {/* FILTERS BAR */}
+      {activeTab!=="simulacion" && (<>
       <div style={{ background:"#fff", borderBottom:"1px solid #eee", padding:"10px 24px", display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
         <span style={{ fontSize:12, fontWeight:700, marginRight:8 }}>Filtros:</span>
         {Object.entries(filterableValues).map(([k,vals]) => {
@@ -785,6 +1195,7 @@ export default function Colorigrama() {
       <div style={{ background:"#FFFDE7", padding:"6px 24px", fontSize:11, color:"#5D4037", borderBottom:"1px solid #eee" }}>
         💡 Las descargas contienen <strong>solo los {filteredData.length} registros filtrados</strong> que se muestran en la tabla. Ajusta los filtros arriba para controlar qué se descarga.
       </div>
+      </>)}
 
       {/* MAIN CONTENT */}
       <div style={{ padding:24 }}>
@@ -794,6 +1205,7 @@ export default function Colorigrama() {
               <KPI label="Total Sesiones" value={metrics.total} color={IPADE.navy} />
               <KPI label="Sesiones Locales (MEX)" value={metrics.local} color="#2E7D32" sub={`${((metrics.local/metrics.total)*100).toFixed(1)}%`} />
               <KPI label="Sesiones Foráneas" value={metrics.foranea} color="#C62828" sub={`${((metrics.foranea/metrics.total)*100).toFixed(1)}%`} />
+              <KPI label="Sesiones Virtuales" value={metrics.virtual} color="#455A64" sub={`${((metrics.virtual/metrics.total)*100).toFixed(1)}%`} />
               <KPI label="Sesiones Especiales" value={Object.values(metrics.specialByProf).reduce((a,b)=>a+b,0)} color={IPADE.gold} sub="InCompany + Enfocados + SEPOS" />
               <KPI label="Profesores Activos" value={Object.keys(metrics.byProf).filter(p=>p!=="(Vacío)").length} color={IPADE.accent1} />
               <KPI label="Sesiones sin Profesor" value={metrics.byProf["(Vacío)"]||0} color={IPADE.midGray} />
@@ -829,12 +1241,186 @@ export default function Colorigrama() {
                 ) : <p style={{color:"#999",fontSize:13,textAlign:"center",padding:40}}>Sin sesiones especiales con los filtros actuales</p>}
               </div>
               <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
-                <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Local vs. Foráneas</h3>
+                <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Local vs. Foráneas vs. Virtual</h3>
                 <ResponsiveContainer width="100%" height={280}>
-                  <PieChart margin={{top:20, right:40, bottom:0, left:40}}><Pie data={[{name:"Local (MEX)",value:metrics.local},{name:"Foráneas",value:metrics.foranea}]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={90} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={true} style={{fontSize:11}}>
-                    <Cell fill="#2E7D32"/><Cell fill="#C62828"/>
+                  <PieChart margin={{top:20, right:40, bottom:0, left:40}}><Pie data={[{name:"Local (MEX)",value:metrics.local},{name:"Foráneas",value:metrics.foranea},{name:"Virtual",value:metrics.virtual}].filter(d=>d.value>0)} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={90} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={true} style={{fontSize:11}}>
+                    {[{name:"Local (MEX)",value:metrics.local,fill:"#2E7D32"},{name:"Foráneas",value:metrics.foranea,fill:"#C62828"},{name:"Virtual",value:metrics.virtual,fill:"#455A64"}].filter(d=>d.value>0).map(d=>(<Cell key={d.name} fill={d.fill}/>))}
                   </Pie><Tooltip/><Legend/></PieChart>
                 </ResponsiveContainer>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ══════════ SIMULACIÓN DE PROGRAMACIÓN ══════════ */}
+        {activeTab==="simulacion" && (
+          <>
+            {/* ─ Sección Titularidades ─ */}
+            <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 2px 8px rgba(0,0,0,.06)", padding:20, marginBottom:24 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10, marginBottom:6 }}>
+                <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:18, margin:0 }}>Titularidades</h3>
+                <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                  {simStatus && <span style={{ fontSize:11, color:IPADE.gold, fontWeight:600 }}>{simStatus}</span>}
+                  <button onClick={downloadTemplate} style={{ fontSize:11, padding:"5px 14px", background:"#217346", color:"#fff", border:"none", borderRadius:5, cursor:"pointer", fontWeight:600 }}>📥 Descargar plantilla</button>
+                  <button onClick={()=>simFileRef.current?.click()} style={{ fontSize:11, padding:"5px 14px", background:IPADE.accent1, color:"#fff", border:"none", borderRadius:5, cursor:"pointer", fontWeight:600 }}>📤 Cargar plantilla</button>
+                  <input ref={simFileRef} type="file" accept=".xlsx,.xls" onChange={handleTemplateUpload} style={{ display:"none" }} />
+                  <button onClick={addSimConfigRow} style={{ fontSize:11, padding:"5px 12px", background:IPADE.navy, color:"#fff", border:"none", borderRadius:5, cursor:"pointer" }}>+ Fila</button>
+                </div>
+              </div>
+              <p style={{ fontSize:11.5, color:"#666", marginBottom:12, lineHeight:1.5 }}>
+                Simula la programación de profesores por programa. La <strong>Dupla</strong> imparte el 60% inicial de las sesiones y el <strong>Titular</strong> el 40% final
+                (según la <em>Secuencia</em> de cada ID de programa <code>Programa + Sede + Grupo</code>). Las filas con <strong>Programa = "PROP CF"</strong> definen al profesor
+                asignado a las sesiones cuyo <em>Curso</em> sea {SPECIAL_CF_CURSOS.map(c=>`"${c}"`).join(", ")}. Descarga la plantilla, llénala y cárgala, o edita directamente abajo.
+              </p>
+              <div style={{ overflowX:"auto", maxHeight:360, overflowY:"auto", border:"1px solid #eee", borderRadius:8 }}>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                  <thead>
+                    <tr>{["Programa Padre","Curso","Programa (ID)","Titular (40% final)","Dupla (60% inicial)","Sesiones",""].map(h=>(
+                      <th key={h} style={{ background:IPADE.navy, color:"#fff", padding:"8px", textAlign:"left", fontSize:11, fontWeight:600, whiteSpace:"nowrap", position:"sticky", top:0, zIndex:5 }}>{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody>
+                    {simConfig.length===0 && (
+                      <tr><td colSpan={7} style={{ padding:20, textAlign:"center", color:"#999" }}>Sin titularidades. Descarga la plantilla y cárgala, o agrega filas con “+ Fila”.</td></tr>
+                    )}
+                    {[...simConfig.map((c,idx)=>({c,idx}))].sort((a,b)=>String(a.c.curso||"").localeCompare(String(b.c.curso||""))).map(({c,idx})=>{
+                      const N = maxSecByProg[String(c.programa||"").trim()];
+                      const k = N!=null?duplaCutoff(N):null;
+                      return (
+                      <tr key={idx} style={{ background:idx%2===0?"#fff":"#f9f8f5" }}>
+                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea" }}>
+                          <select value={c.progPadre||""} onChange={e=>updateSimConfigRow(idx,"progPadre",e.target.value)} style={{ fontSize:11, border:"1px solid #ddd", borderRadius:4, padding:"3px 4px", width:"100%" }}>
+                            <option value="">—</option>{SIM_PROG_PADRE_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea" }}>
+                          <select value={c.curso||""} onChange={e=>updateSimConfigRow(idx,"curso",e.target.value)} style={{ fontSize:11, border:"1px solid #ddd", borderRadius:4, padding:"3px 4px", width:"100%" }}>
+                            <option value="">—</option>{SIM_CURSO_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea", minWidth:160 }}>
+                          <select value={c.programa||""} onChange={e=>updateSimConfigRow(idx,"programa",e.target.value)} style={{ fontSize:11, border:"1px solid #ddd", borderRadius:4, padding:"3px 4px", width:"100%" }}>
+                            <option value="">—</option>
+                            <option value={PROP_CF_LABEL}>{PROP_CF_LABEL}</option>
+                            {programIds.map(o=><option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea" }}>
+                          <input list="sim-prof-list" value={c.titular||""} onChange={e=>updateSimConfigRow(idx,"titular",e.target.value)} style={{ fontSize:11, border:"1px solid #ddd", borderRadius:4, padding:"3px 4px", width:90 }} />
+                        </td>
+                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea" }}>
+                          <input list="sim-prof-list" value={c.dupla||""} onChange={e=>updateSimConfigRow(idx,"dupla",e.target.value)} style={{ fontSize:11, border:"1px solid #ddd", borderRadius:4, padding:"3px 4px", width:90 }} />
+                        </td>
+                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea", fontSize:11, color:"#666", whiteSpace:"nowrap" }}>
+                          {String(c.programa||"").toUpperCase()===PROP_CF_LABEL ? "—" : N!=null ? `${N} ses · D 1-${k} · T ${k+1}-${N}` : <span style={{color:"#C62828"}}>no encontrado</span>}
+                        </td>
+                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea", textAlign:"center" }}>
+                          <button onClick={()=>removeSimConfigRow(idx)} style={{ fontSize:13, border:"none", background:"transparent", color:"#C62828", cursor:"pointer" }} title="Eliminar fila">✕</button>
+                        </td>
+                      </tr>
+                    );})}
+                  </tbody>
+                </table>
+                <datalist id="sim-prof-list">
+                  <option value={PROP_CF_LABEL} />
+                  {professorsAll.map(p=><option key={p} value={p} />)}
+                </datalist>
+              </div>
+            </div>
+
+            {/* ─ Gráficos de simulación ─ */}
+            {simConfig.length>0 && (
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(340px, 1fr))", gap:20, marginBottom:24 }}>
+                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor</h3>
+                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profData.length*26)}>
+                    <BarChart data={simCharts.profData} layout="vertical" margin={{left:50,right:20}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={70} style={{fontSize:11}}/><Tooltip/>
+                      <Bar dataKey="value" radius={[0,6,6,0]}>{simCharts.profData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||IPADE.accent1}/>))}</Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor por Sede</h3>
+                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profSedeData.length*26)}>
+                    <BarChart data={simCharts.profSedeData} layout="vertical" margin={{left:50,right:20}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={70} style={{fontSize:11}}/><Tooltip/><Legend wrapperStyle={{fontSize:10}}/>
+                      {simCharts.sedeKeys.map(s=>(<Bar key={s} dataKey={s} stackId="a" fill={sedeColors[s]||"#999"}/>))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor por Programa</h3>
+                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profProgramaData.length*26)}>
+                    <BarChart data={simCharts.profProgramaData} layout="vertical" margin={{left:50,right:20}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={70} style={{fontSize:11}}/><Tooltip/><Legend wrapperStyle={{fontSize:10}}/>
+                      {simCharts.padreKeys.map(p=>(<Bar key={p} dataKey={p} stackId="a" fill={progColors[p]||"#999"}/>))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Foráneas vs. Local (MEX) vs. Virtual</h3>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart margin={{top:20, right:40, bottom:0, left:40}}>
+                      <Pie data={[{name:"Local (MEX)",value:simCharts.local,fill:"#2E7D32"},{name:"Foráneas",value:simCharts.foranea,fill:"#C62828"},{name:"Virtual",value:simCharts.virtual,fill:"#455A64"}].filter(d=>d.value>0)} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={90} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={true} style={{fontSize:11}}>
+                        {[{name:"Local (MEX)",value:simCharts.local,fill:"#2E7D32"},{name:"Foráneas",value:simCharts.foranea,fill:"#C62828"},{name:"Virtual",value:simCharts.virtual,fill:"#455A64"}].filter(d=>d.value>0).map(d=>(<Cell key={d.name} fill={d.fill}/>))}
+                      </Pie><Tooltip/><Legend/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* ─ Filtros de la tabla simulada ─ */}
+            <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 2px 8px rgba(0,0,0,.06)", padding:"10px 16px", marginBottom:14, display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+              <span style={{ fontSize:12, fontWeight:700, marginRight:8 }}>Filtros:</span>
+              {Object.entries(simFilterableValues).map(([k,vals])=>{
+                const labels={ _progPadre:"Programa Padre", _programa:"Programa", _sede:"Sede", Modalidad:"Modalidad", _grupo:"Grupo", _profSim:"Profesor (sim.)" };
+                return <FilterDropdown key={k} values={vals} selected={simFilters[k]||[]} onChange={sel=>setSimFilters(p=>({...p,[k]:sel}))} label={labels[k]||k} />;
+              })}
+              <div style={{ display:"inline-flex", alignItems:"center", gap:4, border:"1px solid #ccc", borderRadius:4, padding:"2px 8px", background: simDateRange.from||simDateRange.to ? IPADE.gold : "#e8e4dd" }}>
+                <span style={{ fontSize:11, fontWeight:600, color: simDateRange.from||simDateRange.to ? "#fff" : "#333", whiteSpace:"nowrap" }}>📅 Fecha</span>
+                <input type="date" value={simDateRange.from} min={simDateBounds.min} max={simDateRange.to||simDateBounds.max} onChange={e=>setSimDateRange(p=>({...p,from:e.target.value}))} style={{ fontSize:11, border:"none", background:"transparent", cursor:"pointer" }} />
+                <span style={{ fontSize:11, color:"#666" }}>—</span>
+                <input type="date" value={simDateRange.to} min={simDateRange.from||simDateBounds.min} max={simDateBounds.max} onChange={e=>setSimDateRange(p=>({...p,to:e.target.value}))} style={{ fontSize:11, border:"none", background:"transparent", cursor:"pointer" }} />
+                {(simDateRange.from||simDateRange.to) && <span onClick={()=>setSimDateRange({from:"",to:""})} style={{ fontSize:12, cursor:"pointer", color:"#fff", fontWeight:700 }}>✕</span>}
+              </div>
+              <button onClick={()=>{const init={};Object.entries(simFilterableValues).forEach(([k,v])=>{init[k]=[...v];});setSimFilters(init);setSimDateRange({from:"",to:""});}} style={{ fontSize:11, padding:"3px 10px", background:IPADE.navy, color:"#fff", border:"none", borderRadius:4, cursor:"pointer", marginLeft:8 }}>Limpiar filtros</button>
+              <span style={{ marginLeft:"auto", fontSize:11, color:"#666" }}>{simFiltered.length} sesiones simuladas · edita el profesor a mano en la tabla</span>
+            </div>
+
+            {/* ─ Tabla detallada simulada (editable) ─ */}
+            <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 2px 8px rgba(0,0,0,.06)", overflow:"hidden" }}>
+              <div style={{ overflowX:"auto", maxHeight:"calc(100vh - 240px)", overflowY:"auto" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                  <thead>
+                    <tr>{SIM_COLS.map(c=>(
+                      <th key={c.key} onClick={()=>handleSimSort(c.key)} style={{ background:IPADE.navy, color:"#fff", padding:"10px 8px", textAlign:"left", fontSize:11, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", userSelect:"none", position:"sticky", top:0, zIndex:10 }}>
+                        {c.label} {simSortCol===c.key?(simSortDir==="asc"?"▲":"▼"):""}
+                      </th>
+                    ))}</tr>
+                  </thead>
+                  <tbody>
+                    {simFiltered.map((r,i)=>(
+                      <tr key={r["Id Sesión"]??i} style={{ background:i%2===0?"#fff":"#f9f8f5" }}>
+                        {SIM_COLS.map(c=>{
+                          if (c.key==="_profSim") {
+                            const pc=profColors[r._profSim]||"#999";
+                            return <td key={c.key} style={{ padding:"4px 6px", borderBottom:"1px solid #f0efea", borderLeft:`4px solid ${pc}`, background:`${pc}15`, fontWeight:600, minWidth:120 }}>
+                              <EditableCell value={r._profSim} onCommit={val=>setSimOverrides(p=>({...p,[r["Id Sesión"]]:val}))} style={{fontWeight:600,color:pc}} />
+                            </td>;
+                          }
+                          let val=c.fmt?c.fmt(r[c.key]):(r[c.key]??"");
+                          let style={ padding:"8px", borderBottom:"1px solid #f0efea", fontSize:11, maxWidth:c.key==="Tema"?220:"auto", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" };
+                          if (c.key==="_progPadre"||c.key==="_programa") { const pc=progColors[r._progPadre]||"#999"; style.borderLeft=`4px solid ${pc}`; style.background=`${pc}15`; }
+                          if (c.key==="_sede") { const sc=sedeColors[r._sede]||"#999"; style.borderLeft=`4px solid ${sc}`; style.background=`${sc}15`; val=<span style={{display:"flex",alignItems:"center"}}><ColorDot color={sc}/>{val}</span>; }
+                          if (c.key==="_rolSim") { const rc=r._rolSim==="Titular"?"#C62828":r._rolSim==="Dupla"?"#2E7D32":r._rolSim==="PROP CF"?IPADE.gold:"#999"; style.color=rc; style.fontWeight=600; }
+                          return <td key={c.key} style={style} title={String(c.fmt?c.fmt(r[c.key]):(r[c.key]??""))}>{val}</td>;
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </>
