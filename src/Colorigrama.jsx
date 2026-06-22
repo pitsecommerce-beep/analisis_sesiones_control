@@ -742,7 +742,7 @@ export default function Colorigrama() {
     { key:"_secuencia", label:"Secuencia" }, { key:"_profSim", label:"Profesor (Simulado)" },
     { key:"_rolSim", label:"Rol" }, { key:"_fecha", label:"Fecha Sesión", fmt:fmtDate },
     { key:"_horaInicio", label:"Hora inicio" }, { key:"_horaFin", label:"Hora fin" },
-    { key:"Tema", label:"Tema" },
+    { key:"Tema", label:"Tema" }, { key:"Caso/Nota", label:"Caso/Nota" },
   ], []);
 
   const filterableValues = useMemo(() => {
@@ -887,7 +887,7 @@ export default function Colorigrama() {
   // Valores filtrables para la pestaña de simulación
   const simFilterableValues = useMemo(() => {
     if (!simulatedAll.length) return {};
-    const cols = ["_progPadre", "_programa", "_sede", "Modalidad", "_grupo", "_profSim"];
+    const cols = ["Ciclo", "_progPadre", "_programa", "_sede", "Modalidad", "_grupo", "_profSim"];
     const out = {};
     cols.forEach(k => { out[k] = [...new Set(simulatedAll.map(r => String(r[k] ?? "")))].sort(); });
     return out;
@@ -955,21 +955,32 @@ export default function Colorigrama() {
     return { min: toISO(Math.min(...ts)), max: toISO(Math.max(...ts)) };
   }, [simulatedAll]);
 
-  /* Descarga la plantilla de titularidades (.xlsx con desplegables) */
+  /* Descarga la plantilla de titularidades (.xlsx con desplegables).
+     Solo incluye los programas visibles según los filtros activos de la pestaña. */
   const downloadTemplate = useCallback(() => {
     if (!programIds.length) { setSimStatus("⚠️ Carga primero el Excel inicial"); return; }
+    // IDs de programa visibles con los filtros actuales
+    const visibleIds = [...new Set(simFiltered.map(r => r._idPrograma).filter(Boolean))].sort();
+    // Conserva las asignaciones existentes de la configuración cargada
+    const cfgByProg = {};
+    simConfig.forEach(c => { const id = String(c.programa || "").trim(); if (id) cfgByProg[id] = c; });
+    const rows = visibleIds.map(id => cfgByProg[id] || { progPadre: "", curso: "", programa: id, titular: "", dupla: "" });
+    // Siempre incluir la fila especial PROP CF
+    const propRow = simConfig.find(c => String(c.programa || "").trim().toUpperCase() === PROP_CF_LABEL)
+      || { progPadre: "", curso: "", programa: PROP_CF_LABEL, titular: "", dupla: "" };
+    rows.push(propRow);
     setSimStatus("Generando plantilla...");
     try {
-      const blob = generateTemplateBlob(programIds, professorsAll, simConfig);
+      const blob = generateTemplateBlob(visibleIds, professorsAll, rows);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = "Plantilla_Titularidades.xlsx";
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      setSimStatus("✅ Plantilla descargada — llénala y vuelve a cargarla");
+      setSimStatus(`✅ Plantilla descargada (${visibleIds.length} programas visibles) — llénala y vuelve a cargarla`);
     } catch (e) { console.error(e); setSimStatus("⚠️ Error al generar la plantilla"); }
     setTimeout(() => setSimStatus(""), 4000);
-  }, [programIds, professorsAll, simConfig]);
+  }, [programIds, professorsAll, simConfig, simFiltered]);
 
   /* Carga la plantilla de titularidades llenada */
   const handleTemplateUpload = useCallback((e) => {
@@ -1375,7 +1386,7 @@ export default function Colorigrama() {
             <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 2px 8px rgba(0,0,0,.06)", padding:"10px 16px", marginBottom:14, display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
               <span style={{ fontSize:12, fontWeight:700, marginRight:8 }}>Filtros:</span>
               {Object.entries(simFilterableValues).map(([k,vals])=>{
-                const labels={ _progPadre:"Programa Padre", _programa:"Programa", _sede:"Sede", Modalidad:"Modalidad", _grupo:"Grupo", _profSim:"Profesor (sim.)" };
+                const labels={ Ciclo:"Ciclo", _progPadre:"Programa Padre", _programa:"Programa", _sede:"Sede", Modalidad:"Modalidad", _grupo:"Grupo", _profSim:"Profesor (sim.)" };
                 return <FilterDropdown key={k} values={vals} selected={simFilters[k]||[]} onChange={sel=>setSimFilters(p=>({...p,[k]:sel}))} label={labels[k]||k} />;
               })}
               <div style={{ display:"inline-flex", alignItems:"center", gap:4, border:"1px solid #ccc", borderRadius:4, padding:"2px 8px", background: simDateRange.from||simDateRange.to ? IPADE.gold : "#e8e4dd" }}>
@@ -1411,7 +1422,10 @@ export default function Colorigrama() {
                             </td>;
                           }
                           let val=c.fmt?c.fmt(r[c.key]):(r[c.key]??"");
-                          let style={ padding:"8px", borderBottom:"1px solid #f0efea", fontSize:11, maxWidth:c.key==="Tema"?220:"auto", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" };
+                          const wrap = c.key==="Caso/Nota" || c.key==="Tema";
+                          let style = wrap
+                            ? { padding:"8px", borderBottom:"1px solid #f0efea", fontSize:11, verticalAlign:"top", whiteSpace:"normal", wordBreak:"break-word", minWidth:200, maxWidth:c.key==="Caso/Nota"?420:300 }
+                            : { padding:"8px", borderBottom:"1px solid #f0efea", fontSize:11, verticalAlign:"top", maxWidth:"auto", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" };
                           if (c.key==="_progPadre"||c.key==="_programa") { const pc=progColors[r._progPadre]||"#999"; style.borderLeft=`4px solid ${pc}`; style.background=`${pc}15`; }
                           if (c.key==="_sede") { const sc=sedeColors[r._sede]||"#999"; style.borderLeft=`4px solid ${sc}`; style.background=`${sc}15`; val=<span style={{display:"flex",alignItems:"center"}}><ColorDot color={sc}/>{val}</span>; }
                           if (c.key==="_rolSim") { const rc=r._rolSim==="Titular"?"#C62828":r._rolSim==="Dupla"?"#2E7D32":r._rolSim==="PROP CF"?IPADE.gold:"#999"; style.color=rc; style.fontWeight=600; }
