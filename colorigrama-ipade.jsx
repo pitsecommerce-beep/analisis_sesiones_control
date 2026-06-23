@@ -22,7 +22,7 @@ const PROG_PALETTE_DEFAULT = {
   InCompany:"#C8A951", Perfeccionamiento:"#1B2A4A", CA:"#2E5090",
   SEPOS:"#C62828", Enfocados:"#2E7D32", "Máster":"#6A1B9A", MEDEX:"#00695C",
 };
-const SPECIAL_PROGRAMS = ["InCompany", "Enfocados", "SEPOS"];
+const SPECIAL_PROGRAMS = ["InCompany", "Enfocados", "SEPOS", "Certificados"];
 
 /* ── helpers ── */
 function excelDateToJS(serial) {
@@ -720,7 +720,7 @@ export default function Colorigrama() {
               <KPI label="Total Sesiones" value={metrics.total} color={IPADE.navy} />
               <KPI label="Sesiones Locales (MEX)" value={metrics.local} color="#2E7D32" sub={`${((metrics.local/metrics.total)*100).toFixed(1)}%`} />
               <KPI label="Sesiones Foráneas" value={metrics.foranea} color="#C62828" sub={`${((metrics.foranea/metrics.total)*100).toFixed(1)}%`} />
-              <KPI label="Sesiones Especiales" value={Object.values(metrics.specialByProf).reduce((a,b)=>a+b,0)} color={IPADE.gold} sub="InCompany + Enfocados + SEPOS" />
+              <KPI label="Sesiones Especiales" value={Object.values(metrics.specialByProf).reduce((a,b)=>a+b,0)} color={IPADE.gold} sub="InCompany + Enfocados + SEPOS + Certificados" />
               <KPI label="Profesores Activos" value={Object.keys(metrics.byProf).filter(p=>p!=="(Vacío)").length} color={IPADE.accent1} />
               <KPI label="Sesiones sin Profesor" value={metrics.byProf["(Vacío)"]||0} color={IPADE.midGray} />
             </div>
@@ -744,7 +744,7 @@ export default function Colorigrama() {
               </div>
               <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                 <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones Especiales por Profesor</h3>
-                <p style={{ fontSize:11, color:"#888", marginBottom:10 }}>InCompany, Enfocados, SEPOS</p>
+                <p style={{ fontSize:11, color:"#888", marginBottom:10 }}>InCompany, Enfocados, SEPOS, Certificados</p>
                 {specialChartData.length>0 ? (
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={specialChartData} layout="vertical" margin={{left:40,right:20}}>
