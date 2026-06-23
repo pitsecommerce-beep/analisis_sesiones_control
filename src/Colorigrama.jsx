@@ -627,6 +627,121 @@ function duplaCutoff(maxSec) {
   return Math.round((Number(maxSec) || 0) * DUPLA_SHARE);
 }
 
+/* ══════════════════════════════════════════════════════════
+   EXPORT SIMULACIÓN — .xlsx con formato de tabla (autofiltro)
+   y colores por Profesor Final y por ID de programa.
+   ══════════════════════════════════════════════════════════ */
+const SIM_EXPORT_PALETTE = ["#1B5E20","#B71C1C","#0D47A1","#E65100","#4A148C","#006064","#880E4F","#37474F","#5D4037","#1A237E","#BF360C","#004D40","#33691E","#263238","#F57F17","#311B92","#2E7D32","#C62828","#6A1B9A","#00695C","#283593","#AD1457","#00695C","#4E342E"];
+function generateSimExcelBlob(rows, profColors) {
+  const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const colName = c => { let s = "", n = c; while (n >= 0) { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } return s; };
+  const dayName = d => d ? d.toLocaleDateString("es-MX", { weekday: "long" }) : "";
+
+  const COLS = [
+    { h: "ID", g: r => r["Id Sesión"] ?? "", w: 10 },
+    { h: "Ciclo", g: r => r["Ciclo"] ?? "", w: 8 },
+    { h: "Fecha", g: r => fmtDate(r._fecha), w: 12 },
+    { h: "Hora inicio", g: r => r._horaInicio || "", w: 10 },
+    { h: "Hora fin", g: r => r._horaFin || "", w: 10 },
+    { h: "Día", g: r => dayName(r._fecha), w: 11 },
+    { h: "Modalidad", g: r => r["Modalidad"] ?? "", w: 14 },
+    { h: "Profesor Final", g: r => r._profSim || "", c: "prof", w: 14 },
+    { h: "Programa Padre", g: r => r._progPadre || "", w: 16 },
+    { h: "Curso", g: r => r._curso || "", w: 12 },
+    { h: "Programa", g: r => r._idPrograma || "", c: "prog", w: 22 },
+    { h: "Secuencia", g: r => r._secuencia ?? "", w: 9 },
+    { h: "Sede Sesión", g: r => r._sede || "", w: 11 },
+    { h: "Módulo", g: r => r["Módulo"] ?? "", w: 8 },
+    { h: "Tema", g: r => r["Tema"] ?? "", w: 40 },
+    { h: "Caso/Nota", g: r => r["Caso/Nota"] ?? "", w: 40 },
+  ];
+  const nCols = COLS.length, nRows = rows.length;
+  const lastCol = colName(nCols - 1), lastRow = nRows + 1;
+  const ref = `A1:${lastCol}${lastRow}`;
+
+  /* ── color maps ── */
+  const GRAY = "#9E9E9E";
+  const profColor = {}; let pi = 0;
+  [...new Set(rows.map(r => r._profSim || "").filter(Boolean))].forEach(p => {
+    profColor[p] = (profColors && profColors[p]) || SIM_EXPORT_PALETTE[pi++ % SIM_EXPORT_PALETTE.length];
+  });
+  const progColor = {}; let gi = 0;
+  [...new Set(rows.map(r => r._idPrograma).filter(Boolean))].forEach(id => {
+    progColor[id] = SIM_EXPORT_PALETTE[gi++ % SIM_EXPORT_PALETTE.length];
+  });
+
+  /* ── style registries ── */
+  const fonts = [], fontMap = {};
+  const addFont = (key, sz, bold, color) => { if (fontMap[key] != null) return fontMap[key]; fonts.push({ sz, bold, color }); return fontMap[key] = fonts.length - 1; };
+  const fills = ["none", "gray125"], fillMap = {};
+  const addFill = hex => { const k = hex.replace("#", "").toUpperCase(); if (fillMap[k] != null) return fillMap[k]; fills.push(k); return fillMap[k] = fills.length - 1; };
+  const xfs = [], xfMap = {};
+  const addXf = (f, fl) => { const k = f + "_" + fl; if (xfMap[k] != null) return xfMap[k]; xfs.push({ f, fl }); return xfMap[k] = xfs.length - 1; };
+
+  const baseFont = addFont("base", 10, false, "1B2A4A");
+  const hdrFont = addFont("hdr", 11, true, "FFFFFF");
+  const hdrFill = addFill("1B2A4A"), evenFill = addFill("F5F3EE"), whiteFill = addFill("FFFFFF");
+  const baseXfWhite = addXf(baseFont, whiteFill), baseXfEven = addXf(baseFont, evenFill), hdrXf = addXf(hdrFont, hdrFill);
+  const coloredXf = hex => {
+    const ch = (hex || GRAY).replace("#", "").toUpperCase();
+    return addXf(addFont("b_" + ch, 10, true, ch), addFill(rgbToHex(lighten(hex || GRAY))));
+  };
+
+  /* ── sheet rows ── */
+  const cellStr = (col, rowNum, val, xf) => `<c r="${colName(col)}${rowNum}" t="inlineStr" s="${xf}"><is><t xml:space="preserve">${esc(val)}</t></is></c>`;
+  let sheetRows = `<row r="1">${COLS.map((c, ci) => cellStr(ci, 1, c.h, hdrXf)).join("")}</row>`;
+  rows.forEach((r, ri) => {
+    const rowNum = ri + 2;
+    const baseXf = ri % 2 === 0 ? baseXfWhite : baseXfEven;
+    sheetRows += `<row r="${rowNum}">` + COLS.map((c, ci) => {
+      const val = c.g(r);
+      let xf = baseXf;
+      if (c.c === "prof" && val) xf = coloredXf(profColor[val]);
+      else if (c.c === "prog" && val) xf = coloredXf(progColor[val]);
+      return cellStr(ci, rowNum, val, xf);
+    }).join("") + `</row>`;
+  });
+
+  const colsXml = COLS.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c.w}" customWidth="1"/>`).join("");
+  const fontsXml = fonts.map(f => `<font><sz val="${f.sz}"/>${f.bold ? "<b/>" : ""}<color rgb="FF${f.color}"/><name val="Calibri"/></font>`).join("");
+  const fillsXml = fills.map((f, i) => i === 0 ? `<fill><patternFill patternType="none"/></fill>` : i === 1 ? `<fill><patternFill patternType="gray125"/></fill>` : `<fill><patternFill patternType="solid"><fgColor rgb="FF${f}"/></patternFill></fill>`).join("");
+  const xfsXml = xfs.map(x => `<xf fontId="${x.f}" fillId="${x.fl}" borderId="0" numFmtId="0" applyFont="1" applyFill="1"/>`).join("");
+
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="${fonts.length}">${fontsXml}</fonts><fills count="${fills.length}">${fillsXml}</fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfsXml}</cellXfs></styleSheet>`;
+
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><cols>${colsXml}</cols><sheetData>${sheetRows}</sheetData><tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>`;
+
+  const tableCols = COLS.map((c, i) => `<tableColumn id="${i + 1}" name="${esc(c.h)}"/>`).join("");
+  const table = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" name="Colorigrama" displayName="Colorigrama" ref="${ref}" totalsRowShown="0"><autoFilter ref="${ref}"/><tableColumns count="${nCols}">${tableCols}</tableColumns><tableStyleInfo name="TableStyleLight9" showFirstColumn="0" showLastColumn="0" showRowStripes="0" showColumnStripes="0"/></table>`;
+
+  const sheetRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/></Relationships>`;
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/tables/table1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/></Types>`;
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  const xlRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+  const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Colorigrama" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+
+  const files = {
+    "[Content_Types].xml": contentTypes,
+    "_rels/.rels": rels,
+    "xl/_rels/workbook.xml.rels": xlRels,
+    "xl/workbook.xml": workbook,
+    "xl/styles.xml": styles,
+    "xl/worksheets/sheet1.xml": sheet,
+    "xl/worksheets/_rels/sheet1.xml.rels": sheetRels,
+    "xl/tables/table1.xml": table,
+  };
+  return new Blob([buildZip(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
 /* ══════════════ MAIN APP ══════════════ */
 export default function Colorigrama() {
   const [rawData, setRawData] = useState(null);
@@ -981,6 +1096,24 @@ export default function Colorigrama() {
     } catch (e) { console.error(e); setSimStatus("⚠️ Error al generar la plantilla"); }
     setTimeout(() => setSimStatus(""), 4000);
   }, [programIds, professorsAll, simConfig, simFiltered]);
+
+  /* Descarga "Colorigrama <fecha>" con lo que se ve en la tabla de detalle simulada,
+     en formato de tabla y coloreado por Profesor Final y por ID de programa. */
+  const exportSimExcel = useCallback(() => {
+    if (!simFiltered.length) { setSimStatus("⚠️ Sin sesiones para exportar"); setTimeout(() => setSimStatus(""), 3000); return; }
+    setSimStatus("Generando Colorigrama...");
+    try {
+      const blob = generateSimExcelBlob(simFiltered, profColors);
+      const url = URL.createObjectURL(blob);
+      const today = new Date().toLocaleDateString("es-MX").replace(/\//g, "-");
+      const a = document.createElement("a");
+      a.href = url; a.download = `Colorigrama ${today}.xlsx`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSimStatus(`✅ Colorigrama descargado (${simFiltered.length} sesiones)`);
+    } catch (e) { console.error(e); setSimStatus("⚠️ Error al generar el archivo"); }
+    setTimeout(() => setSimStatus(""), 4000);
+  }, [simFiltered, profColors]);
 
   /* Carga la plantilla de titularidades llenada */
   const handleTemplateUpload = useCallback((e) => {
@@ -1397,12 +1530,15 @@ export default function Colorigrama() {
                 {(simDateRange.from||simDateRange.to) && <span onClick={()=>setSimDateRange({from:"",to:""})} style={{ fontSize:12, cursor:"pointer", color:"#fff", fontWeight:700 }}>✕</span>}
               </div>
               <button onClick={()=>{const init={};Object.entries(simFilterableValues).forEach(([k,v])=>{init[k]=[...v];});setSimFilters(init);setSimDateRange({from:"",to:""});}} style={{ fontSize:11, padding:"3px 10px", background:IPADE.navy, color:"#fff", border:"none", borderRadius:4, cursor:"pointer", marginLeft:8 }}>Limpiar filtros</button>
-              <span style={{ marginLeft:"auto", fontSize:11, color:"#666" }}>{simFiltered.length} sesiones simuladas · edita el profesor a mano en la tabla</span>
+              <div style={{ marginLeft:"auto", display:"flex", gap:10, alignItems:"center" }}>
+                <span style={{ fontSize:11, color:"#666" }}>{simFiltered.length} sesiones · edita el profesor a mano</span>
+                <button onClick={exportSimExcel} style={{ fontSize:11, padding:"5px 14px", background:"#217346", color:"#fff", border:"none", borderRadius:5, cursor:"pointer", fontWeight:600 }}>📥 Colorigrama</button>
+              </div>
             </div>
 
             {/* ─ Tabla detallada simulada (editable) ─ */}
             <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 2px 8px rgba(0,0,0,.06)", overflow:"hidden" }}>
-              <div style={{ overflowX:"auto", maxHeight:"calc(100vh - 240px)", overflowY:"auto" }}>
+              <div style={{ overflowX:"auto", maxHeight:"calc(100vh - 130px)", minHeight:480, overflowY:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                   <thead>
                     <tr>{SIM_COLS.map(c=>(
