@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from "recharts";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, LabelList } from "recharts";
 
 /* ── IPADE brand palette ── */
 const IPADE = {
@@ -22,7 +22,7 @@ const PROG_PALETTE_DEFAULT = {
   InCompany:"#C8A951", Perfeccionamiento:"#1B2A4A", CA:"#2E5090",
   SEPOS:"#C62828", Enfocados:"#2E7D32", "Máster":"#6A1B9A", MEDEX:"#00695C",
 };
-const SPECIAL_PROGRAMS = ["InCompany", "Enfocados", "SEPOS"];
+const SPECIAL_PROGRAMS = ["InCompany", "Enfocados", "SEPOS", "Certificados"];
 
 /* ── Simulación de Programación ── */
 // Cursos especiales: cuando la columna "Curso" del Excel inicial coincide con
@@ -1057,8 +1057,8 @@ export default function Colorigrama() {
     const profData = profOrder.map(name => ({ name, value: byProf[name] }));
     const sedeKeys = [...sedeSet].sort();
     const padreKeys = [...padreSet].sort();
-    const profSedeData = profOrder.map(p => ({ name: p, ...byProfSede[p] }));
-    const profProgramaData = profOrder.map(p => ({ name: p, ...byProfPrograma[p] }));
+    const profSedeData = profOrder.map(p => ({ name: p, _total: byProf[p], ...byProfSede[p] }));
+    const profProgramaData = profOrder.map(p => ({ name: p, _total: byProf[p], ...byProfPrograma[p] }));
     return { profData, profSedeData, profProgramaData, sedeKeys, padreKeys, local, foranea, virtual, total: simFiltered.length };
   }, [simFiltered]);
 
@@ -1350,7 +1350,7 @@ export default function Colorigrama() {
               <KPI label="Sesiones Locales (MEX)" value={metrics.local} color="#2E7D32" sub={`${((metrics.local/metrics.total)*100).toFixed(1)}%`} />
               <KPI label="Sesiones Foráneas" value={metrics.foranea} color="#C62828" sub={`${((metrics.foranea/metrics.total)*100).toFixed(1)}%`} />
               <KPI label="Sesiones Virtuales" value={metrics.virtual} color="#455A64" sub={`${((metrics.virtual/metrics.total)*100).toFixed(1)}%`} />
-              <KPI label="Sesiones Especiales" value={Object.values(metrics.specialByProf).reduce((a,b)=>a+b,0)} color={IPADE.gold} sub="InCompany + Enfocados + SEPOS" />
+              <KPI label="Sesiones Especiales" value={Object.values(metrics.specialByProf).reduce((a,b)=>a+b,0)} color={IPADE.gold} sub="InCompany + Enfocados + SEPOS + Certificados" />
               <KPI label="Profesores Activos" value={Object.keys(metrics.byProf).filter(p=>p!=="(Vacío)").length} color={IPADE.accent1} />
               <KPI label="Sesiones sin Profesor" value={metrics.byProf["(Vacío)"]||0} color={IPADE.midGray} />
             </div>
@@ -1366,20 +1366,20 @@ export default function Colorigrama() {
               <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                 <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor</h3>
                 <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={profChartData} layout="vertical" margin={{left:40,right:20}}>
+                  <BarChart data={profChartData} layout="vertical" margin={{left:40,right:36}}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={50} style={{fontSize:11}}/><Tooltip/>
-                    <Bar dataKey="value" radius={[0,6,6,0]}>{profChartData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||"#999"}/>))}</Bar>
+                    <Bar dataKey="value" radius={[0,6,6,0]}><LabelList dataKey="value" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/>{profChartData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||"#999"}/>))}</Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
               <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                 <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones Especiales por Profesor</h3>
-                <p style={{ fontSize:11, color:"#888", marginBottom:10 }}>InCompany, Enfocados, SEPOS</p>
+                <p style={{ fontSize:11, color:"#888", marginBottom:10 }}>InCompany, Enfocados, SEPOS, Certificados</p>
                 {specialChartData.length>0 ? (
                   <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={specialChartData} layout="vertical" margin={{left:40,right:20}}>
+                    <BarChart data={specialChartData} layout="vertical" margin={{left:40,right:36}}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={50} style={{fontSize:11}}/><Tooltip/>
-                      <Bar dataKey="value" radius={[0,6,6,0]}>{specialChartData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||IPADE.gold}/>))}</Bar>
+                      <Bar dataKey="value" radius={[0,6,6,0]}><LabelList dataKey="value" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/>{specialChartData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||IPADE.gold}/>))}</Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <p style={{color:"#999",fontSize:13,textAlign:"center",padding:40}}>Sin sesiones especiales con los filtros actuales</p>}
@@ -1478,27 +1478,27 @@ export default function Colorigrama() {
                 <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor</h3>
                   <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profData.length*26)}>
-                    <BarChart data={simCharts.profData} layout="vertical" margin={{left:50,right:20}}>
+                    <BarChart data={simCharts.profData} layout="vertical" margin={{left:50,right:36}}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={70} style={{fontSize:11}}/><Tooltip/>
-                      <Bar dataKey="value" radius={[0,6,6,0]}>{simCharts.profData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||IPADE.accent1}/>))}</Bar>
+                      <Bar dataKey="value" radius={[0,6,6,0]}><LabelList dataKey="value" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/>{simCharts.profData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||IPADE.accent1}/>))}</Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
                 <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor por Sede</h3>
                   <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profSedeData.length*26)}>
-                    <BarChart data={simCharts.profSedeData} layout="vertical" margin={{left:50,right:20}}>
+                    <BarChart data={simCharts.profSedeData} layout="vertical" margin={{left:50,right:36}}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={70} style={{fontSize:11}}/><Tooltip/><Legend wrapperStyle={{fontSize:10}}/>
-                      {simCharts.sedeKeys.map(s=>(<Bar key={s} dataKey={s} stackId="a" fill={sedeColors[s]||"#999"}/>))}
+                      {simCharts.sedeKeys.map((s,i)=>(<Bar key={s} dataKey={s} stackId="a" fill={sedeColors[s]||"#999"}>{i===simCharts.sedeKeys.length-1 && <LabelList dataKey="_total" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/>}</Bar>))}
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
                 <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor por Programa</h3>
                   <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profProgramaData.length*26)}>
-                    <BarChart data={simCharts.profProgramaData} layout="vertical" margin={{left:50,right:20}}>
+                    <BarChart data={simCharts.profProgramaData} layout="vertical" margin={{left:50,right:36}}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={70} style={{fontSize:11}}/><Tooltip/><Legend wrapperStyle={{fontSize:10}}/>
-                      {simCharts.padreKeys.map(p=>(<Bar key={p} dataKey={p} stackId="a" fill={progColors[p]||"#999"}/>))}
+                      {simCharts.padreKeys.map((p,i)=>(<Bar key={p} dataKey={p} stackId="a" fill={progColors[p]||"#999"}>{i===simCharts.padreKeys.length-1 && <LabelList dataKey="_total" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/>}</Bar>))}
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
