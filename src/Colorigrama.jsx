@@ -39,6 +39,19 @@ const SIM_CURSO_OPTIONS = ["Contabilidad", "Costos", "Control II", "Riesgos", "D
 // Reparto del curso: la Dupla imparte el 60% inicial, el Titular el 40% final.
 const DUPLA_SHARE = 0.6;
 
+/* ── Caso especial X5 ──
+   Para cualquier programa cuya columna "Programa" contenga "X5" (sin importar
+   sede ni grupo) el reparto es fijo: el Titular imparte la sesión 1 y de la 7
+   en adelante (7-12), y la Dupla imparte de la 2 a la 6. */
+function isX5Program(programa) {
+  return String(programa || "").toUpperCase().includes("X5");
+}
+// Devuelve true si, según el reparto X5, la secuencia corresponde a la Dupla (2-6).
+function isX5Dupla(secuencia) {
+  const s = Number(secuencia) || 0;
+  return s >= 2 && s <= 6;
+}
+
 /* ── helpers ── */
 function excelDateToJS(serial) {
   if (!serial || typeof serial !== "number") return null;
@@ -985,8 +998,14 @@ export default function Colorigrama() {
     }
     const cfg = simLookup.byProg[r._idPrograma];
     if (!cfg) return { prof: "", rol: "" };
-    const k = duplaCutoff(maxSecByProg[r._idPrograma] || 0);
-    const isDupla = r._secuencia <= k;
+    // Caso especial X5: Titular = sesión 1 y 7-12; Dupla = 2-6 (independiente del 60/40).
+    let isDupla;
+    if (isX5Program(r._programa)) {
+      isDupla = isX5Dupla(r._secuencia);
+    } else {
+      const k = duplaCutoff(maxSecByProg[r._idPrograma] || 0);
+      isDupla = r._secuencia <= k;
+    }
     const prof = (isDupla ? cfg.dupla : cfg.titular) || "";
     return { prof, rol: isDupla ? "Dupla" : "Titular" };
   }, [simLookup, maxSecByProg]);
@@ -1425,7 +1444,9 @@ export default function Colorigrama() {
               </div>
               <p style={{ fontSize:11.5, color:"#666", marginBottom:12, lineHeight:1.5 }}>
                 Simula la programación de profesores por programa. La <strong>Dupla</strong> imparte el 60% inicial de las sesiones y el <strong>Titular</strong> el 40% final
-                (según la <em>Secuencia</em> de cada ID de programa <code>Programa + Sede + Grupo</code>). Las filas con <strong>Programa = "PROP CF"</strong> definen al profesor
+                (según la <em>Secuencia</em> de cada ID de programa <code>Programa + Sede + Grupo</code>). <strong>Caso especial X5:</strong> en cualquier programa cuyo
+                <em> Programa</em> contenga "X5" (sin importar sede ni grupo) el Titular imparte la sesión 1 y de la 7 a la 12, y la Dupla la 2 a la 6.
+                Las filas con <strong>Programa = "PROP CF"</strong> definen al profesor
                 asignado a las sesiones cuyo <em>Curso</em> sea {SPECIAL_CF_CURSOS.map(c=>`"${c}"`).join(", ")}. Descarga la plantilla, llénala y cárgala, o edita directamente abajo.
               </p>
               <div style={{ overflowX:"auto", maxHeight:360, overflowY:"auto", border:"1px solid #eee", borderRadius:8 }}>
@@ -1442,6 +1463,7 @@ export default function Colorigrama() {
                     {[...simConfig.map((c,idx)=>({c,idx}))].sort((a,b)=>String(a.c.curso||"").localeCompare(String(b.c.curso||""))).map(({c,idx})=>{
                       const N = maxSecByProg[String(c.programa||"").trim()];
                       const k = N!=null?duplaCutoff(N):null;
+                      const esX5 = isX5Program(c.programa);
                       return (
                       <tr key={idx} style={{ background:idx%2===0?"#fff":"#f9f8f5" }}>
                         <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea" }}>
@@ -1468,7 +1490,7 @@ export default function Colorigrama() {
                           <input list="sim-prof-list" value={c.dupla||""} onChange={e=>updateSimConfigRow(idx,"dupla",e.target.value)} style={{ fontSize:11, border:"1px solid #ddd", borderRadius:4, padding:"3px 4px", width:90 }} />
                         </td>
                         <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea", fontSize:11, color:"#666", whiteSpace:"nowrap" }}>
-                          {String(c.programa||"").toUpperCase()===PROP_CF_LABEL ? "—" : N!=null ? `${N} ses · D 1-${k} · T ${k+1}-${N}` : <span style={{color:"#C62828"}}>no encontrado</span>}
+                          {String(c.programa||"").toUpperCase()===PROP_CF_LABEL ? "—" : N!=null ? (esX5 ? `X5 · ${N} ses · D 2-6 · T 1, 7-${N}` : `${N} ses · D 1-${k} · T ${k+1}-${N}`) : <span style={{color:"#C62828"}}>no encontrado</span>}
                         </td>
                         <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea", textAlign:"center" }}>
                           <button onClick={()=>removeSimConfigRow(idx)} style={{ fontSize:13, border:"none", background:"transparent", color:"#C62828", cursor:"pointer" }} title="Eliminar fila">✕</button>
