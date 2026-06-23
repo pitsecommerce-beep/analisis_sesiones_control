@@ -9,6 +9,9 @@ const IPADE = {
   accent1: "#2E5090", accent2: "#4A7AB5",
 };
 
+/* Logo institucional (misma liga que el favicon) */
+const IPADE_LOGO = "https://www.ipade.mx/wp-content/uploads/2022/10/fav.png?w=512";
+
 const SEDE_PALETTE_DEFAULT = {
   MEX:"#1B2A4A", GDL:"#2E7D32", MTY:"#C62828", HMO:"#E65100", LEO:"#6A1B9A",
   CUL:"#00838F", GUA:"#AD1457", MOR:"#4E342E", STAFE:"#1565C0", AGU:"#558B2F",
@@ -1233,16 +1236,20 @@ export default function Colorigrama() {
   /* ══════════ RENDER ══════════ */
   if (!rawData) {
     return (
-      <div style={{ minHeight:"100vh", background:`linear-gradient(145deg, ${IPADE.darkNavy} 0%, ${IPADE.navy} 50%, ${IPADE.accent1} 100%)`, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Instrument Sans', sans-serif", padding:20 }}>
-        <div style={{ textAlign:"center", maxWidth:520 }}>
-          <div style={{ fontSize:11, letterSpacing:6, color:IPADE.gold, textTransform:"uppercase", marginBottom:12, fontWeight:700 }}>IPADE Business School</div>
-          <h1 style={{ fontFamily:"'DM Serif Display', Georgia, serif", fontSize:42, color:IPADE.white, marginBottom:8, lineHeight:1.15 }}>Colorigrama</h1>
-          <p style={{ color:"rgba(255,255,255,.6)", fontSize:15, marginBottom:32, lineHeight:1.6 }}>Sistema de análisis visual de sesiones académicas.<br/>Carga tu archivo Excel para comenzar.</p>
-          <label style={{ display:"inline-flex", alignItems:"center", gap:10, background:IPADE.gold, color:IPADE.darkNavy, fontWeight:700, fontSize:15, padding:"14px 32px", borderRadius:8, cursor:"pointer", boxShadow:"0 4px 20px rgba(200,169,81,.35)" }}>
-            📁 Cargar archivo Excel
+      <div style={{ minHeight:"100vh", background:`radial-gradient(circle at 50% 0%, ${IPADE.accent1} 0%, ${IPADE.navy} 45%, ${IPADE.darkNavy} 100%)`, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Instrument Sans', sans-serif", padding:20 }}>
+        <div style={{ textAlign:"center", maxWidth:540 }}>
+          <img src={IPADE_LOGO} alt="IPADE Business School" style={{ width:84, height:84, objectFit:"contain", marginBottom:24, filter:"drop-shadow(0 8px 24px rgba(0,0,0,.35))" }} />
+          <div style={{ fontSize:11, letterSpacing:7, color:IPADE.gold, textTransform:"uppercase", marginBottom:18, fontWeight:600 }}>IPADE&nbsp;Business&nbsp;School</div>
+          <h1 style={{ fontFamily:"'DM Serif Display', Georgia, serif", fontSize:52, color:IPADE.white, marginBottom:6, lineHeight:1.1, letterSpacing:"-0.5px" }}>Colorigrama</h1>
+          <div style={{ width:60, height:2, background:IPADE.gold, margin:"0 auto 22px", opacity:.8 }} />
+          <p style={{ color:"rgba(255,255,255,.65)", fontSize:15.5, marginBottom:36, lineHeight:1.7, maxWidth:420, marginLeft:"auto", marginRight:"auto" }}>Sistema de análisis visual de sesiones académicas.<br/>Carga tu archivo Excel para comenzar.</p>
+          <label style={{ display:"inline-flex", alignItems:"center", gap:10, background:IPADE.gold, color:IPADE.darkNavy, fontWeight:700, fontSize:15, padding:"15px 36px", borderRadius:10, cursor:"pointer", boxShadow:"0 6px 24px rgba(200,169,81,.4)", letterSpacing:".3px", transition:"transform .15s ease, box-shadow .15s ease" }}
+            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 30px rgba(200,169,81,.5)";}}
+            onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 6px 24px rgba(200,169,81,.4)";}}>
+            Cargar archivo Excel
             <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display:"none" }} />
           </label>
-          <p style={{ color:"rgba(255,255,255,.35)", fontSize:12, marginTop:16 }}>Formatos aceptados: .xlsx, .xls</p>
+          <p style={{ color:"rgba(255,255,255,.4)", fontSize:12, marginTop:18, letterSpacing:".5px" }}>Formatos aceptados: .xlsx · .xls · .csv</p>
         </div>
       </div>
     );
@@ -1251,26 +1258,31 @@ export default function Colorigrama() {
   return (
     <div style={{ fontFamily:"'Instrument Sans', sans-serif", background:IPADE.offWhite, minHeight:"100vh", color:IPADE.navy }}>
       {/* HEADER */}
-      <header style={{ background:IPADE.navy, padding:"14px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
-        <div>
-          <span style={{ fontSize:10, letterSpacing:4, color:IPADE.gold, textTransform:"uppercase", fontWeight:700 }}>IPADE Business School</span>
-          <h1 style={{ fontFamily:"'DM Serif Display', Georgia, serif", fontSize:22, color:"#fff", margin:0 }}>Colorigrama</h1>
+      <header style={{ background:`linear-gradient(100deg, ${IPADE.darkNavy} 0%, ${IPADE.navy} 70%)`, padding:"16px 28px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12, borderBottom:`3px solid ${IPADE.gold}`, boxShadow:"0 2px 12px rgba(0,0,0,.18)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+          <img src={IPADE_LOGO} alt="IPADE" style={{ width:42, height:42, objectFit:"contain", flexShrink:0 }} />
+          <div style={{ borderLeft:`1px solid rgba(200,169,81,.4)`, paddingLeft:14 }}>
+            <span style={{ fontSize:10, letterSpacing:4, color:IPADE.gold, textTransform:"uppercase", fontWeight:600 }}>IPADE Business School</span>
+            <h1 style={{ fontFamily:"'DM Serif Display', Georgia, serif", fontSize:24, color:"#fff", margin:0, lineHeight:1.1, letterSpacing:"-0.3px" }}>Colorigrama</h1>
+          </div>
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-          <span style={{ color:"rgba(255,255,255,.5)", fontSize:12 }}>📄 {fileName}</span>
-          <label style={{ fontSize:12, color:IPADE.gold, cursor:"pointer", padding:"5px 12px", border:`1px solid ${IPADE.gold}`, borderRadius:5 }}>
+          <span style={{ color:"rgba(255,255,255,.55)", fontSize:12 }}>📄 {fileName}</span>
+          <label style={{ fontSize:12, color:IPADE.gold, cursor:"pointer", padding:"6px 14px", border:`1px solid ${IPADE.gold}`, borderRadius:6, transition:"background .15s ease, color .15s ease" }}
+            onMouseEnter={e=>{e.currentTarget.style.background=IPADE.gold;e.currentTarget.style.color=IPADE.darkNavy;}}
+            onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=IPADE.gold;}}>
             Cambiar archivo <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display:"none" }} />
           </label>
-          <button onClick={()=>setShowColorPanel(!showColorPanel)} style={{ fontSize:12, padding:"5px 12px", background:showColorPanel?IPADE.gold:"transparent", color:showColorPanel?IPADE.darkNavy:IPADE.gold, border:`1px solid ${IPADE.gold}`, borderRadius:5, cursor:"pointer" }}>
+          <button onClick={()=>setShowColorPanel(!showColorPanel)} style={{ fontSize:12, padding:"6px 14px", background:showColorPanel?IPADE.gold:"transparent", color:showColorPanel?IPADE.darkNavy:IPADE.gold, border:`1px solid ${IPADE.gold}`, borderRadius:6, cursor:"pointer", fontWeight:600 }}>
             🎨 Colores
           </button>
         </div>
       </header>
 
       {/* TABS */}
-      <div style={{ background:IPADE.darkNavy, display:"flex", gap:0, paddingLeft:24 }}>
+      <div style={{ background:IPADE.darkNavy, display:"flex", gap:4, paddingLeft:28, paddingTop:4 }}>
         {[["dashboard","📊 Dashboard"],["tabla","📋 Tabla Detallada"],["simulacion","🧩 Simulación de Programación"]].map(([id,label]) => (
-          <button key={id} onClick={()=>setActiveTab(id)} style={{ padding:"10px 20px", fontSize:13, fontWeight:activeTab===id?700:400, background:activeTab===id?IPADE.offWhite:"transparent", color:activeTab===id?IPADE.navy:"rgba(255,255,255,.6)", border:"none", borderRadius:"8px 8px 0 0", cursor:"pointer" }}>
+          <button key={id} onClick={()=>setActiveTab(id)} style={{ padding:"11px 22px", fontSize:13, fontWeight:activeTab===id?700:500, background:activeTab===id?IPADE.offWhite:"transparent", color:activeTab===id?IPADE.navy:"rgba(255,255,255,.6)", border:"none", borderTop:activeTab===id?`3px solid ${IPADE.gold}`:"3px solid transparent", borderRadius:"8px 8px 0 0", cursor:"pointer", letterSpacing:".2px", transition:"color .15s ease" }}>
             {label}
           </button>
         ))}
@@ -1331,7 +1343,7 @@ export default function Colorigrama() {
         </button>
         <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
           {exportStatus && <span style={{ fontSize:11, color:IPADE.gold, fontWeight:600 }}>{exportStatus}</span>}
-          <button onClick={exportExcel} style={{ fontSize:11, padding:"5px 14px", background:"#217346", color:"#fff", border:"none", borderRadius:5, cursor:"pointer", fontWeight:600 }}>📥 Excel coloreado</button>
+          <button onClick={exportExcel} style={{ fontSize:11, padding:"5px 14px", background:"#217346", color:"#fff", border:"none", borderRadius:5, cursor:"pointer", fontWeight:600 }}>📥 Colorigrama</button>
           <button onClick={exportPDF} style={{ fontSize:11, padding:"5px 14px", background:"#C62828", color:"#fff", border:"none", borderRadius:5, cursor:"pointer", fontWeight:600 }}>📄 Reporte PDF</button>
         </div>
       </div>
@@ -1624,9 +1636,10 @@ export default function Colorigrama() {
         )}
       </div>
 
-      <footer style={{ background:IPADE.navy, padding:"16px 24px", textAlign:"center", marginTop:20 }}>
-        <span style={{ color:IPADE.gold, fontSize:10, letterSpacing:3, textTransform:"uppercase", fontWeight:700 }}>IPADE Business School</span>
-        <span style={{ color:"rgba(255,255,255,.3)", fontSize:11, display:"block", marginTop:4 }}>Colorigrama — Sistema de Análisis de Sesiones</span>
+      <footer style={{ background:`linear-gradient(100deg, ${IPADE.darkNavy} 0%, ${IPADE.navy} 70%)`, padding:"22px 24px", textAlign:"center", marginTop:24, borderTop:`3px solid ${IPADE.gold}` }}>
+        <img src={IPADE_LOGO} alt="IPADE" style={{ width:34, height:34, objectFit:"contain", marginBottom:8, opacity:.9 }} />
+        <span style={{ color:IPADE.gold, fontSize:10, letterSpacing:4, textTransform:"uppercase", fontWeight:600, display:"block" }}>IPADE Business School</span>
+        <span style={{ color:"rgba(255,255,255,.4)", fontSize:11, display:"block", marginTop:4 }}>Colorigrama — Sistema de Análisis de Sesiones</span>
       </footer>
     </div>
   );
