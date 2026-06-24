@@ -52,6 +52,32 @@ function isX5Dupla(secuencia) {
   return s >= 2 && s <= 6;
 }
 
+/* ── Color tenue para la tabla de Titularidades ──
+   El Programa Padre define una familia de tono (hue) y el Curso varía el
+   matiz/luminosidad dentro de esa familia. Colores claros para análisis visual. */
+const MISSING_BG = "#FFF3B0";        // amarillo tenue: falta asignar profesor
+const MISSING_BORDER = "#E0B500";
+function normKey(s) {
+  return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+}
+function hashStr(s) {
+  let h = 0; const t = String(s || "");
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
+  return h;
+}
+const PADRE_HUE = { MEDEX: 210, MASTER: 275, PERFECCIONAMIENTO: 135, CA: 35, MEDEX2: 200 };
+function softPadreCursoColor(progPadre, curso) {
+  if (!progPadre) return "transparent";
+  const padre = normKey(progPadre);
+  let hue = PADRE_HUE[padre];
+  if (hue == null) hue = hashStr(padre) % 360;
+  const ci = SIM_CURSO_OPTIONS.findIndex(c => normKey(c) === normKey(curso));
+  const idx = ci >= 0 ? ci : (curso ? hashStr(curso) % SIM_CURSO_OPTIONS.length : 0);
+  const light = 93 - idx * 2.3;          // 93% → ~78%
+  const hue2 = (hue + (idx - 3) * 5 + 360) % 360;
+  return `hsl(${hue2}, 46%, ${light}%)`;
+}
+
 /* ── helpers ── */
 function excelDateToJS(serial) {
   if (!serial || typeof serial !== "number") return null;
@@ -1024,7 +1050,7 @@ export default function Colorigrama() {
   // Valores filtrables para la pestaña de simulación
   const simFilterableValues = useMemo(() => {
     if (!simulatedAll.length) return {};
-    const cols = ["Ciclo", "_progPadre", "_programa", "_sede", "Modalidad", "_grupo", "_profSim"];
+    const cols = ["Ciclo", "_progPadre", "_programa", "_curso", "_sede", "Modalidad", "_grupo", "_profSim"];
     const out = {};
     cols.forEach(k => { out[k] = [...new Set(simulatedAll.map(r => String(r[k] ?? "")))].sort(); });
     return out;
@@ -1481,6 +1507,11 @@ export default function Colorigrama() {
                 Las filas con <strong>Programa = "PROP CF"</strong> definen al profesor
                 asignado a las sesiones cuyo <em>Curso</em> sea {SPECIAL_CF_CURSOS.map(c=>`"${c}"`).join(", ")}. Descarga la plantilla, llénala y cárgala, o edita directamente abajo.
               </p>
+              <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center", fontSize:10.5, color:"#777", marginBottom:10 }}>
+                <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:13, height:13, borderRadius:3, background:MISSING_BG, border:`2px solid ${MISSING_BORDER}` }} /> Falta asignar profesor</span>
+                <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:13, height:13, borderRadius:3, background:softPadreCursoColor("MEDEX","Contabilidad") }} /> Color por <strong>Programa Padre</strong> (familia de tono) y <strong>Curso</strong> (matiz)</span>
+                <span>Titular / Dupla con el color del profesor (editable en <strong>🎨 Colores</strong>, igual que la tabla de abajo)</span>
+              </div>
               <div style={{ overflowX:"auto", maxHeight:360, overflowY:"auto", border:"1px solid #eee", borderRadius:8 }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                   <thead>
@@ -1496,15 +1527,25 @@ export default function Colorigrama() {
                       const N = maxSecByProg[String(c.programa||"").trim()];
                       const k = N!=null?duplaCutoff(N):null;
                       const esX5 = isX5Program(c.programa);
+                      const esPropCf = normKey(c.programa)===PROP_CF_LABEL;
+                      const cellBg = softPadreCursoColor(c.progPadre, c.curso);
+                      // PROP CF solo requiere un profesor; el resto requieren Titular y Dupla.
+                      const faltaTitular = esPropCf ? (!c.titular && !c.dupla) : !c.titular;
+                      const faltaDupla   = esPropCf ? (!c.titular && !c.dupla) : !c.dupla;
+                      const tColor = profColors[c.titular];
+                      const dColor = profColors[c.dupla];
+                      const profStyle = (falta, color) => falta
+                        ? { background:MISSING_BG, borderLeft:`4px solid ${MISSING_BORDER}` }
+                        : (color ? { background:`${color}22`, borderLeft:`4px solid ${color}` } : {});
                       return (
                       <tr key={idx} style={{ background:idx%2===0?"#fff":"#f9f8f5" }}>
-                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea" }}>
-                          <select value={c.progPadre||""} onChange={e=>updateSimConfigRow(idx,"progPadre",e.target.value)} style={{ fontSize:11, border:"1px solid #ddd", borderRadius:4, padding:"3px 4px", width:"100%" }}>
+                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea", background:cellBg }}>
+                          <select value={c.progPadre||""} onChange={e=>updateSimConfigRow(idx,"progPadre",e.target.value)} style={{ fontSize:11, fontWeight:600, border:"1px solid rgba(0,0,0,.12)", borderRadius:4, padding:"3px 4px", width:"100%", background:"transparent", color:"#2a2a2a" }}>
                             <option value="">—</option>{SIM_PROG_PADRE_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}
                           </select>
                         </td>
-                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea" }}>
-                          <select value={c.curso||""} onChange={e=>updateSimConfigRow(idx,"curso",e.target.value)} style={{ fontSize:11, border:"1px solid #ddd", borderRadius:4, padding:"3px 4px", width:"100%" }}>
+                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea", background:cellBg }}>
+                          <select value={c.curso||""} onChange={e=>updateSimConfigRow(idx,"curso",e.target.value)} style={{ fontSize:11, border:"1px solid rgba(0,0,0,.12)", borderRadius:4, padding:"3px 4px", width:"100%", background:"transparent", color:"#2a2a2a" }}>
                             <option value="">—</option>{SIM_CURSO_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}
                           </select>
                         </td>
@@ -1515,11 +1556,11 @@ export default function Colorigrama() {
                             {programIds.map(o=><option key={o} value={o}>{o}</option>)}
                           </select>
                         </td>
-                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea" }}>
-                          <input list="sim-prof-list" value={c.titular||""} onChange={e=>updateSimConfigRow(idx,"titular",e.target.value)} style={{ fontSize:11, border:"1px solid #ddd", borderRadius:4, padding:"3px 4px", width:90 }} />
+                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea", ...profStyle(faltaTitular, tColor) }} title={faltaTitular?"Falta asignar Titular":undefined}>
+                          <input list="sim-prof-list" value={c.titular||""} placeholder="— sin asignar —" onChange={e=>updateSimConfigRow(idx,"titular",e.target.value)} style={{ fontSize:11, fontWeight:tColor?600:400, color:tColor||"#333", border:"1px solid rgba(0,0,0,.12)", borderRadius:4, padding:"3px 4px", width:90, background:"transparent" }} />
                         </td>
-                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea" }}>
-                          <input list="sim-prof-list" value={c.dupla||""} onChange={e=>updateSimConfigRow(idx,"dupla",e.target.value)} style={{ fontSize:11, border:"1px solid #ddd", borderRadius:4, padding:"3px 4px", width:90 }} />
+                        <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea", ...profStyle(faltaDupla, dColor) }} title={faltaDupla?"Falta asignar Dupla":undefined}>
+                          <input list="sim-prof-list" value={c.dupla||""} placeholder="— sin asignar —" onChange={e=>updateSimConfigRow(idx,"dupla",e.target.value)} style={{ fontSize:11, fontWeight:dColor?600:400, color:dColor||"#333", border:"1px solid rgba(0,0,0,.12)", borderRadius:4, padding:"3px 4px", width:90, background:"transparent" }} />
                         </td>
                         <td style={{ padding:"3px 6px", borderBottom:"1px solid #f0efea", fontSize:11, color:"#666", whiteSpace:"nowrap" }}>
                           {String(c.programa||"").toUpperCase()===PROP_CF_LABEL ? "—" : N!=null ? (esX5 ? `X5 · ${N} ses · D 2-6 · T 1, 7-${N}` : `${N} ses · D 1-${k} · T ${k+1}-${N}`) : <span style={{color:"#C62828"}}>no encontrado</span>}
@@ -1601,7 +1642,7 @@ export default function Colorigrama() {
             <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 2px 8px rgba(0,0,0,.06)", padding:"10px 16px", marginBottom:14, display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
               <span style={{ fontSize:12, fontWeight:700, marginRight:8 }}>Filtros:</span>
               {Object.entries(simFilterableValues).map(([k,vals])=>{
-                const labels={ Ciclo:"Ciclo", _progPadre:"Programa Padre", _programa:"Programa", _sede:"Sede", Modalidad:"Modalidad", _grupo:"Grupo", _profSim:"Profesor (sim.)" };
+                const labels={ Ciclo:"Ciclo", _progPadre:"Programa Padre", _programa:"Programa", _curso:"Curso", _sede:"Sede", Modalidad:"Modalidad", _grupo:"Grupo", _profSim:"Profesor (sim.)" };
                 return <FilterDropdown key={k} values={vals} selected={simFilters[k]||[]} onChange={sel=>setSimFilters(p=>({...p,[k]:sel}))} label={labels[k]||k} />;
               })}
               <div style={{ display:"inline-flex", alignItems:"center", gap:4, border:"1px solid #ccc", borderRadius:4, padding:"2px 8px", background: simDateRange.from||simDateRange.to ? IPADE.gold : "#e8e4dd" }}>
