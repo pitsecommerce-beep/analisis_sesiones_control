@@ -46,6 +46,10 @@ const DUPLA_SHARE = 0.6;
 function isX5Program(programa) {
   return String(programa || "").toUpperCase().includes("X5");
 }
+// Devuelve true si el programa es X1 (único caso en que PROP CF usa asignación global).
+function isX1Program(programa) {
+  return String(programa || "").toUpperCase().includes("X1");
+}
 // Devuelve true si, según el reparto X5, la secuencia corresponde a la Dupla (2-6).
 function isX5Dupla(secuencia) {
   const s = Number(secuencia) || 0;
@@ -1020,7 +1024,10 @@ export default function Colorigrama() {
   // Si no hay profesor asignado para ese programa, devuelve "" (queda en blanco) para
   // señalar que todavía hace falta asignarle profesor.
   const resolveSimProf = useCallback((r) => {
-    if (SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase())) {
+    // PROP CF con asignación GLOBAL (profesor único) sólo aplica cuando el Programa es X1.
+    // En cualquier otro caso (p. ej. R0) las sesiones de Contabilidad Financiera se reparten
+    // como todas las demás: por Id de Programa y el profesor asignado ahí (60/40 o X5).
+    if (SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase()) && isX1Program(r._programa)) {
       return { prof: simLookup.propCfProf || "", rol: "PROP CF" };
     }
     const cfg = simLookup.byProg[r._idPrograma];
@@ -1526,7 +1533,8 @@ export default function Colorigrama() {
                 (según la <em>Secuencia</em> de cada ID de programa <code>Programa + Sede + Grupo</code>). <strong>Caso especial X5:</strong> en cualquier programa cuyo
                 <em> Programa</em> contenga "X5" (sin importar sede ni grupo) el Titular imparte la sesión 1 y de la 7 a la 12, y la Dupla la 2 a la 6.
                 Las filas con <strong>Programa = "PROP CF"</strong> definen al profesor
-                asignado a las sesiones cuyo <em>Curso</em> sea {SPECIAL_CF_CURSOS.map(c=>`"${c}"`).join(", ")}. Descarga la plantilla, llénala y cárgala, o edita directamente abajo.
+                asignado a las sesiones cuyo <em>Curso</em> sea {SPECIAL_CF_CURSOS.map(c=>`"${c}"`).join(", ")} <strong>únicamente cuando el Programa es X1</strong>.
+                En el resto de los casos (p. ej. R0) esas sesiones se reparten como todas las demás, por Id de Programa. Descarga la plantilla, llénala y cárgala, o edita directamente abajo.
               </p>
               <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center", fontSize:10.5, color:"#777", marginBottom:10 }}>
                 <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><span style={{ width:13, height:13, borderRadius:3, background:MISSING_BG, border:`2px solid ${MISSING_BORDER}` }} /> Falta asignar profesor</span>
