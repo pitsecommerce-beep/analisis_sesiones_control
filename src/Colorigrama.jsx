@@ -1611,8 +1611,11 @@ export default function Colorigrama() {
                 <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", gridColumn:"1 / -1" }}>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap", marginBottom:4 }}>
                     <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, margin:0 }}>Titularidades por Profesor (MEDEX y Máster)</h3>
-                    <button onClick={()=>setShowTitularidadesChart(v=>!v)} style={{ fontSize:11, padding:"5px 12px", background:showTitularidadesChart?"transparent":IPADE.gold, color:showTitularidadesChart?IPADE.navy:IPADE.darkNavy, border:`1px solid ${IPADE.gold}`, borderRadius:5, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>
-                      {showTitularidadesChart ? "🙈 Ocultar gráfica" : "👁 Mostrar gráfica"}
+                    <button onClick={()=>setShowTitularidadesChart(v=>!v)} aria-expanded={showTitularidadesChart} style={{ display:"inline-flex", alignItems:"center", gap:7, fontSize:11, padding:"5px 12px", background:showTitularidadesChart?"transparent":IPADE.gold, color:showTitularidadesChart?IPADE.navy:IPADE.darkNavy, border:`1px solid ${IPADE.gold}`, borderRadius:5, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>
+                      {showTitularidadesChart ? "Ocultar gráfica" : "Mostrar gráfica"}
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transform:showTitularidadesChart?"rotate(180deg)":"rotate(0deg)", transition:"transform .2s ease" }}>
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
                     </button>
                   </div>
                   {showTitularidadesChart && (<>
