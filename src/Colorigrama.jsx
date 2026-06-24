@@ -50,6 +50,12 @@ function isX5Program(programa) {
 function isX1Program(programa) {
   return String(programa || "").toUpperCase().includes("X1");
 }
+/* Homologa, SOLO para la simulación, las variantes Virtual con su equivalente MEX:
+   "X1 Virtual R" → "X1 MEX R", "X4 Virtual R" → "X4 MEX R", "X5 Virtual R" → "X5 MEX R".
+   Son el mismo curso y comparten Titular y Dupla, así que se manejan como X{1,4,5} MEX R. */
+function canonicalSimId(idPrograma) {
+  return String(idPrograma || "").replace(/^(X[145])\s+Virtual\s+R$/i, "$1 MEX R");
+}
 // Devuelve true si, según el reparto X5, la secuencia corresponde a la Dupla (2-6).
 function isX5Dupla(secuencia) {
   const s = Number(secuencia) || 0;
@@ -91,6 +97,12 @@ function excelTimeToStr(t) {
   if (t == null || t === "" || typeof t !== "number") return "";
   const totalMin = Math.round(t * 24 * 60);
   return `${String(Math.floor(totalMin / 60)).padStart(2,"0")}:${String(totalMin % 60).padStart(2,"0")}`;
+}
+// Convierte "HH:MM" a minutos desde medianoche; null si no es válido.
+function hhmmToMin(s) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || "").trim());
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
 }
 function fmtDate(d) {
   if (!d) return "";
@@ -987,7 +999,7 @@ export default function Colorigrama() {
   // IDs únicos de programa (Programa + " " + Sede Sesión + " " + Grupo) del Excel inicial
   const programIds = useMemo(() => {
     if (!rawData) return [];
-    return [...new Set(rawData.map(r => r._idPrograma).filter(Boolean))].sort();
+    return [...new Set(rawData.map(r => canonicalSimId(r._idPrograma)).filter(Boolean))].sort();
   }, [rawData]);
 
   // Lista de profesores únicos del Excel inicial (códigos individuales)
@@ -1000,7 +1012,7 @@ export default function Colorigrama() {
   const maxSecByProg = useMemo(() => {
     const m = {};
     (rawData || []).forEach(r => {
-      const id = r._idPrograma;
+      const id = canonicalSimId(r._idPrograma);
       if (!id) return;
       if (!(id in m) || r._secuencia > m[id]) m[id] = r._secuencia;
     });
@@ -1024,20 +1036,29 @@ export default function Colorigrama() {
   // Si no hay profesor asignado para ese programa, devuelve "" (queda en blanco) para
   // señalar que todavía hace falta asignarle profesor.
   const resolveSimProf = useCallback((r) => {
+    const esCF = SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase());
+    // PROP CF: si la sesión dura menos de 15 minutos (Hora fin − Hora inicio) no se asigna profesor.
+    if (esCF) {
+      const ini = hhmmToMin(r._horaInicio), fin = hhmmToMin(r._horaFin);
+      if (ini != null && fin != null && fin - ini >= 0 && fin - ini < 15) {
+        return { prof: "", rol: "PROP CF (<15 min)" };
+      }
+    }
     // PROP CF con asignación GLOBAL (profesor único) sólo aplica cuando el Programa es X1.
     // En cualquier otro caso (p. ej. R0) las sesiones de Contabilidad Financiera se reparten
     // como todas las demás: por Id de Programa y el profesor asignado ahí (60/40 o X5).
-    if (SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase()) && isX1Program(r._programa)) {
+    if (esCF && isX1Program(r._programa)) {
       return { prof: simLookup.propCfProf || "", rol: "PROP CF" };
     }
-    const cfg = simLookup.byProg[r._idPrograma];
+    const idProg = canonicalSimId(r._idPrograma);
+    const cfg = simLookup.byProg[idProg];
     if (!cfg) return { prof: "", rol: "" };
     // Caso especial X5: Titular = sesión 1 y 7-12; Dupla = 2-6 (independiente del 60/40).
     let isDupla;
     if (isX5Program(r._programa)) {
       isDupla = isX5Dupla(r._secuencia);
     } else {
-      const k = duplaCutoff(maxSecByProg[r._idPrograma] || 0);
+      const k = duplaCutoff(maxSecByProg[idProg] || 0);
       isDupla = r._secuencia <= k;
     }
     const prof = (isDupla ? cfg.dupla : cfg.titular) || "";
@@ -1051,7 +1072,8 @@ export default function Colorigrama() {
       const { prof, rol } = resolveSimProf(r);
       const idSes = r["Id Sesión"];
       const override = simOverrides[idSes];
-      return { ...r, _profSim: override != null ? override : prof, _rolSim: override != null ? "Manual" : rol };
+      // _idPrograma homologado (X{1,4,5} Virtual R → X{1,4,5} MEX R) para la simulación.
+      return { ...r, _idPrograma: canonicalSimId(r._idPrograma), _profSim: override != null ? override : prof, _rolSim: override != null ? "Manual" : rol };
     });
   }, [rawData, resolveSimProf, simOverrides]);
 
