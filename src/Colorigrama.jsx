@@ -122,7 +122,7 @@ function ColorDot({ color, size = 10 }) {
 /* ── Estilos compartidos para las gráficas (look más limpio y legible) ── */
 const AXIS_TICK = { fontSize: 12, fill: "#5b6470" };
 const GRID_STROKE = "#eef0f3";
-const PIE_LABEL_STYLE = { fontSize: 12, fill: "#3a3f47", fontWeight: 600 };
+const PIE_LABEL_STYLE = { fontSize: 12, fontWeight: 600 };
 
 /* Tooltip personalizado: tarjeta blanca con sombra suave, mucho más legible
    y nítida que el tooltip por defecto de Recharts. */
