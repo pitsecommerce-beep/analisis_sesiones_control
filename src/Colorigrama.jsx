@@ -1048,7 +1048,7 @@ export default function Colorigrama() {
     });
   }, [rawData, resolveSimProf, simOverrides]);
 
-  // Valores filtrables para la pestaña de simulación
+  // Valores filtrables para la pestaña de simulación (universo completo del Excel)
   const simFilterableValues = useMemo(() => {
     if (!simulatedAll.length) return {};
     const cols = ["Ciclo", "_progPadre", "_programa", "_curso", "_sede", "Modalidad", "_grupo", "_profSim"];
@@ -1056,6 +1056,38 @@ export default function Colorigrama() {
     cols.forEach(k => { out[k] = [...new Set(simulatedAll.map(r => String(r[k] ?? "")))].sort(); });
     return out;
   }, [simulatedAll]);
+
+  // Opciones disponibles por filtro de forma CRUZADA: para cada columna se
+  // calculan los valores que siguen siendo posibles aplicando TODOS los demás
+  // filtros (y el rango de fechas), pero no el de la propia columna. Así, al
+  // elegir p. ej. Programa = X1, los demás filtros sólo muestran las opciones
+  // que existen para X1 en la carga del Excel.
+  const simAvailableValues = useMemo(() => {
+    if (!simulatedAll.length) return {};
+    const cols = ["Ciclo", "_progPadre", "_programa", "_curso", "_sede", "Modalidad", "_grupo", "_profSim"];
+    const hasDate = !!(simDateRange.from || simDateRange.to);
+    const from = simDateRange.from ? new Date(simDateRange.from).getTime() : -Infinity;
+    const to = simDateRange.to ? new Date(simDateRange.to + "T23:59:59").getTime() : Infinity;
+    const passesDate = r => !hasDate || (r._fecha && r._fecha.getTime() >= from && r._fecha.getTime() <= to);
+    const passesCol = (r, k) => {
+      const sel = simFilters[k];
+      if (sel == null) return true;        // aún sin inicializar → no restringe
+      if (sel.length === 0) return false;
+      return sel.includes(String(r[k] ?? ""));
+    };
+    const out = {};
+    cols.forEach(k => {
+      const set = new Set();
+      for (const r of simulatedAll) {
+        if (!passesDate(r)) continue;
+        let ok = true;
+        for (const other of cols) { if (other !== k && !passesCol(r, other)) { ok = false; break; } }
+        if (ok) set.add(String(r[k] ?? ""));
+      }
+      out[k] = [...set].sort();
+    });
+    return out;
+  }, [simulatedAll, simFilters, simDateRange]);
 
   useEffect(() => {
     if (!simulatedAll.length) return;
@@ -1640,9 +1672,14 @@ export default function Colorigrama() {
             {/* ─ Filtros de la tabla simulada ─ */}
             <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 2px 8px rgba(0,0,0,.06)", padding:"10px 16px", marginBottom:14, display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
               <span style={{ fontSize:12, fontWeight:700, marginRight:8 }}>Filtros:</span>
-              {Object.entries(simFilterableValues).map(([k,vals])=>{
+              {Object.keys(simFilterableValues).map(k=>{
                 const labels={ Ciclo:"Ciclo", _progPadre:"Programa Padre", _programa:"Programa", _curso:"Curso", _sede:"Sede", Modalidad:"Modalidad", _grupo:"Grupo", _profSim:"Profesor (sim.)" };
-                return <FilterDropdown key={k} values={vals} selected={simFilters[k]||[]} onChange={sel=>setSimFilters(p=>({...p,[k]:sel}))} label={labels[k]||k} />;
+                // Sólo se muestran las opciones que siguen siendo posibles según los demás filtros.
+                const vals = simAvailableValues[k] || [];
+                const cur = simFilters[k] || [];
+                const visibleSelected = cur.filter(v => vals.includes(v));
+                const hiddenSelected = cur.filter(v => !vals.includes(v)); // se preserva lo no visible
+                return <FilterDropdown key={k} values={vals} selected={visibleSelected} onChange={sel=>setSimFilters(p=>({...p,[k]:[...new Set([...sel,...hiddenSelected])]}))} label={labels[k]||k} />;
               })}
               <div style={{ display:"inline-flex", alignItems:"center", gap:4, border:"1px solid #ccc", borderRadius:4, padding:"2px 8px", background: simDateRange.from||simDateRange.to ? IPADE.gold : "#e8e4dd" }}>
                 <span style={{ fontSize:11, fontWeight:600, color: simDateRange.from||simDateRange.to ? "#fff" : "#333", whiteSpace:"nowrap" }}>📅 Fecha</span>
