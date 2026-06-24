@@ -1084,6 +1084,35 @@ export default function Colorigrama() {
     return { profData, profSedeData, profProgramaData, sedeKeys, padreKeys, local, foranea, virtual, total: simFiltered.length };
   }, [simFiltered]);
 
+  // Titularidades por profesor: nº de ID de Programa (MEDEX y Máster) donde el
+  // profesor es Titular (columna "Titular" de la config). Dos series: contando
+  // los programas de Contabilidad Financiera (los que tienen sesiones PROP CF)
+  // y sin contarlos.
+  const titularidadesChart = useMemo(() => {
+    const PADRE_OK = new Set(["MEDEX", "MASTER"]);
+    const norm = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+    // Agrupa las sesiones por ID de Programa (solo MEDEX y Máster) y marca si
+    // el programa incluye alguna sesión de Contabilidad Financiera (PROP CF).
+    const progs = {};
+    simFiltered.forEach(r => {
+      const id = r._idPrograma;
+      if (!id || !PADRE_OK.has(norm(r._progPadre))) return;
+      const g = progs[id] || (progs[id] = { hasCF: false });
+      if (SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase())) g.hasCF = true;
+    });
+    const conCF = {}, sinCF = {};
+    Object.entries(progs).forEach(([id, g]) => {
+      const cfg = simLookup.byProg[id];
+      const titular = (cfg && String(cfg.titular || "").trim()) || "(Sin titular)";
+      conCF[titular] = (conCF[titular] || 0) + 1;
+      if (!g.hasCF) sinCF[titular] = (sinCF[titular] || 0) + 1;
+    });
+    const profs = [...new Set([...Object.keys(conCF), ...Object.keys(sinCF)])];
+    return profs
+      .map(name => ({ name, conCF: conCF[name] || 0, sinCF: sinCF[name] || 0 }))
+      .sort((a, b) => b.conCF - a.conCF || b.sinCF - a.sinCF);
+  }, [simFiltered, simLookup]);
+
   const simDateBounds = useMemo(() => {
     if (!simulatedAll.length) return { min: "", max: "" };
     const ts = simulatedAll.map(r => r._fecha?.getTime()).filter(Boolean);
@@ -1545,6 +1574,22 @@ export default function Colorigrama() {
                       </Pie><Tooltip/><Legend/>
                     </PieChart>
                   </ResponsiveContainer>
+                </div>
+                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", gridColumn:"1 / -1" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:4 }}>Titularidades por Profesor (MEDEX y Máster)</h3>
+                  <p style={{ fontSize:11, color:"#888", marginBottom:14 }}>ID de Programa de MEDEX y Máster donde el profesor es <strong>Titular</strong>. <strong>Con CF</strong> incluye los programas con Contabilidad Financiera (PROP CF); <strong>Sin CF</strong> los excluye.</p>
+                  {titularidadesChart.length>0 ? (
+                    <ResponsiveContainer width="100%" height={Math.max(280, titularidadesChart.length*44)}>
+                      <BarChart data={titularidadesChart} layout="vertical" margin={{left:50,right:44}} barGap={2}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#eee"/>
+                        <XAxis type="number" allowDecimals={false} style={{fontSize:11}}/>
+                        <YAxis type="category" dataKey="name" width={80} style={{fontSize:11}}/>
+                        <Tooltip/><Legend wrapperStyle={{fontSize:11}}/>
+                        <Bar dataKey="conCF" name="Con Contabilidad Financiera (PROP CF)" fill={IPADE.gold} radius={[0,4,4,0]}><LabelList dataKey="conCF" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/></Bar>
+                        <Bar dataKey="sinCF" name="Sin Contabilidad Financiera" fill={IPADE.navy} radius={[0,4,4,0]}><LabelList dataKey="sinCF" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/></Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : <p style={{color:"#999",fontSize:13,textAlign:"center",padding:40}}>Sin titularidades de MEDEX o Máster con los filtros actuales</p>}
                 </div>
               </div>
             )}
