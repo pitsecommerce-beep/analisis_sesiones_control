@@ -1087,31 +1087,34 @@ export default function Colorigrama() {
   // Titularidades por profesor: nº de ID de Programa (MEDEX y Máster) donde el
   // profesor es Titular (columna "Titular" de la config). Dos series: contando
   // los programas de Contabilidad Financiera (los que tienen sesiones PROP CF)
-  // y sin contarlos.
+  // y sin contarlos. Los programas contados responden a los filtros de la
+  // pestaña (simFiltered); la clasificación CF es intrínseca (simulatedAll).
   const titularidadesChart = useMemo(() => {
     const PADRE_OK = new Set(["MEDEX", "MASTER"]);
     const norm = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-    // Agrupa las sesiones por ID de Programa (solo MEDEX y Máster) y marca si
-    // el programa incluye alguna sesión de Contabilidad Financiera (PROP CF).
-    const progs = {};
+    // Clasificación CF intrínseca por ID de Programa (sobre todo el dataset, para
+    // que el split Con/Sin CF no se rompa si un filtro oculta las sesiones PROP CF).
+    const cfPrograms = new Set();
+    simulatedAll.forEach(r => {
+      if (r._idPrograma && SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase())) cfPrograms.add(r._idPrograma);
+    });
+    // Programas a contar = los presentes en el dataset filtrado (MEDEX y Máster).
+    const visibles = new Set();
     simFiltered.forEach(r => {
-      const id = r._idPrograma;
-      if (!id || !PADRE_OK.has(norm(r._progPadre))) return;
-      const g = progs[id] || (progs[id] = { hasCF: false });
-      if (SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase())) g.hasCF = true;
+      if (r._idPrograma && PADRE_OK.has(norm(r._progPadre))) visibles.add(r._idPrograma);
     });
     const conCF = {}, sinCF = {};
-    Object.entries(progs).forEach(([id, g]) => {
+    visibles.forEach(id => {
       const cfg = simLookup.byProg[id];
       const titular = (cfg && String(cfg.titular || "").trim()) || "(Sin titular)";
       conCF[titular] = (conCF[titular] || 0) + 1;
-      if (!g.hasCF) sinCF[titular] = (sinCF[titular] || 0) + 1;
+      if (!cfPrograms.has(id)) sinCF[titular] = (sinCF[titular] || 0) + 1;
     });
     const profs = [...new Set([...Object.keys(conCF), ...Object.keys(sinCF)])];
     return profs
       .map(name => ({ name, conCF: conCF[name] || 0, sinCF: sinCF[name] || 0 }))
       .sort((a, b) => b.conCF - a.conCF || b.sinCF - a.sinCF);
-  }, [simFiltered, simLookup]);
+  }, [simFiltered, simulatedAll, simLookup]);
 
   const simDateBounds = useMemo(() => {
     if (!simulatedAll.length) return { min: "", max: "" };
