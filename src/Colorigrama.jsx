@@ -1110,37 +1110,25 @@ export default function Colorigrama() {
     return { profData, profSedeData, profProgramaData, sedeKeys, padreKeys, local, foranea, virtual, total: simFiltered.length };
   }, [simFiltered]);
 
-  // Titularidades por profesor: nº de ID de Programa (MEDEX y Máster) donde el
-  // profesor es Titular (columna "Titular" de la config). Dos series: contando
-  // los programas de Contabilidad Financiera (los que tienen sesiones PROP CF)
-  // y sin contarlos. Los programas contados responden a los filtros de la
-  // pestaña (simFiltered); la clasificación CF es intrínseca (simulatedAll).
+  // Titularidades por profesor (MEDEX y Máster): cuenta las SESIONES asignadas a
+  // cada profesor (_profSim) cuyo Programa Padre sea MEDEX o Máster. Dos series:
+  //  · Con CF: todas esas sesiones.
+  //  · Sin CF: excluye las sesiones cuyo Curso se relaciona con PROP CF.
+  // Responde a los filtros de la pestaña (simFiltered).
   const titularidadesChart = useMemo(() => {
     const PADRE_OK = new Set(["MEDEX", "MASTER"]);
-    const norm = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-    // Clasificación CF intrínseca por ID de Programa (sobre todo el dataset, para
-    // que el split Con/Sin CF no se rompa si un filtro oculta las sesiones PROP CF).
-    const cfPrograms = new Set();
-    simulatedAll.forEach(r => {
-      if (r._idPrograma && SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase())) cfPrograms.add(r._idPrograma);
-    });
-    // Programas a contar = los presentes en el dataset filtrado (MEDEX y Máster).
-    const visibles = new Set();
-    simFiltered.forEach(r => {
-      if (r._idPrograma && PADRE_OK.has(norm(r._progPadre))) visibles.add(r._idPrograma);
-    });
     const conCF = {}, sinCF = {};
-    visibles.forEach(id => {
-      const cfg = simLookup.byProg[id];
-      const titular = (cfg && String(cfg.titular || "").trim()) || "(Sin titular)";
-      conCF[titular] = (conCF[titular] || 0) + 1;
-      if (!cfPrograms.has(id)) sinCF[titular] = (sinCF[titular] || 0) + 1;
+    simFiltered.forEach(r => {
+      if (!PADRE_OK.has(normKey(r._progPadre))) return;
+      const prof = r._profSim || "(Sin asignar)";
+      conCF[prof] = (conCF[prof] || 0) + 1;
+      if (!SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase())) sinCF[prof] = (sinCF[prof] || 0) + 1;
     });
     const profs = [...new Set([...Object.keys(conCF), ...Object.keys(sinCF)])];
     return profs
       .map(name => ({ name, conCF: conCF[name] || 0, sinCF: sinCF[name] || 0 }))
       .sort((a, b) => b.conCF - a.conCF || b.sinCF - a.sinCF);
-  }, [simFiltered, simulatedAll, simLookup]);
+  }, [simFiltered]);
 
   const simDateBounds = useMemo(() => {
     if (!simulatedAll.length) return { min: "", max: "" };
@@ -1621,7 +1609,7 @@ export default function Colorigrama() {
                 </div>
                 <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", gridColumn:"1 / -1" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:4 }}>Titularidades por Profesor (MEDEX y Máster)</h3>
-                  <p style={{ fontSize:11, color:"#888", marginBottom:14 }}>ID de Programa de MEDEX y Máster donde el profesor es <strong>Titular</strong>. <strong>Con CF</strong> incluye los programas con Contabilidad Financiera (PROP CF); <strong>Sin CF</strong> los excluye.</p>
+                  <p style={{ fontSize:11, color:"#888", marginBottom:14 }}>Sesiones asignadas a cada profesor cuyo <strong>Programa Padre</strong> es MEDEX o Máster. <strong>Con CF</strong> cuenta todas; <strong>Sin CF</strong> excluye las sesiones cuyo <em>Curso</em> es Contabilidad Financiera (PROP CF). Responde a los filtros de abajo.</p>
                   {titularidadesChart.length>0 ? (
                     <ResponsiveContainer width="100%" height={Math.max(280, titularidadesChart.length*44)}>
                       <BarChart data={titularidadesChart} layout="vertical" margin={{left:50,right:44}} barGap={2}>
