@@ -119,6 +119,33 @@ function ColorDot({ color, size = 10 }) {
   return <span style={{ display:"inline-block", width:size, height:size, borderRadius:"50%", backgroundColor:color, marginRight:6, flexShrink:0 }} />;
 }
 
+/* ── Estilos compartidos para las gráficas (look más limpio y legible) ── */
+const AXIS_TICK = { fontSize: 12, fill: "#5b6470" };
+const GRID_STROKE = "#eef0f3";
+const PIE_LABEL_STYLE = { fontSize: 12, fill: "#3a3f47", fontWeight: 600 };
+
+/* Tooltip personalizado: tarjeta blanca con sombra suave, mucho más legible
+   y nítida que el tooltip por defecto de Recharts. */
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload || !payload.length) return null;
+  const rows = payload.filter(p => p && p.value != null && p.value !== 0);
+  if (!rows.length) return null;
+  return (
+    <div style={{ background:"#fff", border:"1px solid #ececec", borderRadius:10, boxShadow:"0 6px 22px rgba(0,0,0,.14)", padding:"9px 13px", fontSize:12.5 }}>
+      {label != null && label !== "" && (
+        <div style={{ fontWeight:700, color:IPADE.navy, marginBottom:6, maxWidth:240, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{label}</div>
+      )}
+      {rows.map((p,i)=>(
+        <div key={i} style={{ display:"flex", alignItems:"center", gap:8, lineHeight:1.7 }}>
+          <span style={{ width:10, height:10, borderRadius:3, background:p.color||p.payload?.fill||"#999", flexShrink:0 }} />
+          <span style={{ color:"#555", flex:1, paddingRight:14 }}>{p.name}</span>
+          <span style={{ fontWeight:700, color:"#222" }}>{p.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── hex color utils ── */
 function hexToRgb(hex) {
   const h = (hex||"#999999").replace("#","");
@@ -1496,18 +1523,23 @@ export default function Colorigrama() {
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(340px, 1fr))", gap:20, marginBottom:24 }}>
               <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                 <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Sede</h3>
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart><Pie data={sedeChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} style={{fontSize:11}}>
-                    {sedeChartData.map(d=>(<Cell key={d.name} fill={sedeColors[d.name]||"#999"} />))}
-                  </Pie><Tooltip/></PieChart>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie data={sedeChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={96} paddingAngle={2} stroke="#fff" strokeWidth={2} label={({name,percent})=>percent>=0.04?`${name} ${(percent*100).toFixed(0)}%`:""} labelLine={false} style={PIE_LABEL_STYLE} isAnimationActive={false}>
+                      {sedeChartData.map(d=>(<Cell key={d.name} fill={sedeColors[d.name]||"#999"} />))}
+                    </Pie><Tooltip content={<ChartTooltip/>}/>
+                  </PieChart>
                 </ResponsiveContainer>
               </div>
               <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                 <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor</h3>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={profChartData} layout="vertical" margin={{left:40,right:36}}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={50} style={{fontSize:11}}/><Tooltip/>
-                    <Bar dataKey="value" radius={[0,6,6,0]}><LabelList dataKey="value" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/>{profChartData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||"#999"}/>))}</Bar>
+                <ResponsiveContainer width="100%" height={Math.max(280, profChartData.length*34)}>
+                  <BarChart data={profChartData} layout="vertical" margin={{left:8,right:44,top:4,bottom:4}} barCategoryGap="22%">
+                    <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false}/>
+                    <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                    <YAxis type="category" dataKey="name" width={64} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                    <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
+                    <Bar dataKey="value" radius={[0,6,6,0]} maxBarSize={26}><LabelList dataKey="value" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/>{profChartData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||"#999"}/>))}</Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1515,20 +1547,23 @@ export default function Colorigrama() {
                 <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones Especiales por Profesor</h3>
                 <p style={{ fontSize:11, color:"#888", marginBottom:10 }}>InCompany, Enfocados, SEPOS, Certificados</p>
                 {specialChartData.length>0 ? (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={specialChartData} layout="vertical" margin={{left:40,right:36}}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={50} style={{fontSize:11}}/><Tooltip/>
-                      <Bar dataKey="value" radius={[0,6,6,0]}><LabelList dataKey="value" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/>{specialChartData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||IPADE.gold}/>))}</Bar>
+                  <ResponsiveContainer width="100%" height={Math.max(260, specialChartData.length*34)}>
+                    <BarChart data={specialChartData} layout="vertical" margin={{left:8,right:44,top:4,bottom:4}} barCategoryGap="22%">
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false}/>
+                      <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                      <YAxis type="category" dataKey="name" width={64} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
+                      <Bar dataKey="value" radius={[0,6,6,0]} maxBarSize={26}><LabelList dataKey="value" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/>{specialChartData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||IPADE.gold}/>))}</Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <p style={{color:"#999",fontSize:13,textAlign:"center",padding:40}}>Sin sesiones especiales con los filtros actuales</p>}
               </div>
               <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                 <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Local vs. Foráneas vs. Virtual</h3>
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart margin={{top:20, right:40, bottom:0, left:40}}><Pie data={[{name:"Local (MEX)",value:metrics.local},{name:"Foráneas",value:metrics.foranea},{name:"Virtual",value:metrics.virtual}].filter(d=>d.value>0)} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={90} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={true} style={{fontSize:11}}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart margin={{top:8, right:8, bottom:8, left:8}}><Pie data={[{name:"Local (MEX)",value:metrics.local},{name:"Foráneas",value:metrics.foranea},{name:"Virtual",value:metrics.virtual}].filter(d=>d.value>0)} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={94} paddingAngle={2} stroke="#fff" strokeWidth={2} label={({percent})=>`${(percent*100).toFixed(0)}%`} labelLine={false} style={PIE_LABEL_STYLE} isAnimationActive={false}>
                     {[{name:"Local (MEX)",value:metrics.local,fill:"#2E7D32"},{name:"Foráneas",value:metrics.foranea,fill:"#C62828"},{name:"Virtual",value:metrics.virtual,fill:"#455A64"}].filter(d=>d.value>0).map(d=>(<Cell key={d.name} fill={d.fill}/>))}
-                  </Pie><Tooltip/><Legend/></PieChart>
+                  </Pie><Tooltip content={<ChartTooltip/>}/><Legend iconType="circle" wrapperStyle={{fontSize:12}}/></PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -1635,38 +1670,47 @@ export default function Colorigrama() {
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(340px, 1fr))", gap:20, marginBottom:24 }}>
                 <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor</h3>
-                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profData.length*26)}>
-                    <BarChart data={simCharts.profData} layout="vertical" margin={{left:50,right:36}}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={70} style={{fontSize:11}}/><Tooltip/>
-                      <Bar dataKey="value" radius={[0,6,6,0]}><LabelList dataKey="value" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/>{simCharts.profData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||IPADE.accent1}/>))}</Bar>
+                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profData.length*34)}>
+                    <BarChart data={simCharts.profData} layout="vertical" margin={{left:8,right:44,top:4,bottom:4}} barCategoryGap="22%">
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false}/>
+                      <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                      <YAxis type="category" dataKey="name" width={78} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
+                      <Bar dataKey="value" radius={[0,6,6,0]} maxBarSize={26}><LabelList dataKey="value" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/>{simCharts.profData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||IPADE.accent1}/>))}</Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
                 <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor por Sede</h3>
-                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profSedeData.length*26)}>
-                    <BarChart data={simCharts.profSedeData} layout="vertical" margin={{left:50,right:36}}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={70} style={{fontSize:11}}/><Tooltip/><Legend wrapperStyle={{fontSize:10}}/>
-                      {simCharts.sedeKeys.map((s,i)=>(<Bar key={s} dataKey={s} stackId="a" fill={sedeColors[s]||"#999"}>{i===simCharts.sedeKeys.length-1 && <LabelList dataKey="_total" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/>}</Bar>))}
+                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profSedeData.length*34)}>
+                    <BarChart data={simCharts.profSedeData} layout="vertical" margin={{left:8,right:44,top:4,bottom:4}} barCategoryGap="22%">
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false}/>
+                      <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                      <YAxis type="category" dataKey="name" width={78} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/><Legend iconType="circle" wrapperStyle={{fontSize:11}}/>
+                      {simCharts.sedeKeys.map((s,i)=>(<Bar key={s} dataKey={s} stackId="a" fill={sedeColors[s]||"#999"} maxBarSize={26}>{i===simCharts.sedeKeys.length-1 && <LabelList dataKey="_total" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/>}</Bar>))}
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
                 <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor por Programa</h3>
-                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profProgramaData.length*26)}>
-                    <BarChart data={simCharts.profProgramaData} layout="vertical" margin={{left:50,right:36}}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis type="number" style={{fontSize:11}}/><YAxis type="category" dataKey="name" width={70} style={{fontSize:11}}/><Tooltip/><Legend wrapperStyle={{fontSize:10}}/>
-                      {simCharts.padreKeys.map((p,i)=>(<Bar key={p} dataKey={p} stackId="a" fill={progColors[p]||"#999"}>{i===simCharts.padreKeys.length-1 && <LabelList dataKey="_total" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/>}</Bar>))}
+                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profProgramaData.length*34)}>
+                    <BarChart data={simCharts.profProgramaData} layout="vertical" margin={{left:8,right:44,top:4,bottom:4}} barCategoryGap="22%">
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false}/>
+                      <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                      <YAxis type="category" dataKey="name" width={78} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/><Legend iconType="circle" wrapperStyle={{fontSize:11}}/>
+                      {simCharts.padreKeys.map((p,i)=>(<Bar key={p} dataKey={p} stackId="a" fill={progColors[p]||"#999"} maxBarSize={26}>{i===simCharts.padreKeys.length-1 && <LabelList dataKey="_total" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/>}</Bar>))}
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
                 <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Foráneas vs. Local (MEX) vs. Virtual</h3>
-                  <ResponsiveContainer width="100%" height={280}>
-                    <PieChart margin={{top:20, right:40, bottom:0, left:40}}>
-                      <Pie data={[{name:"Local (MEX)",value:simCharts.local,fill:"#2E7D32"},{name:"Foráneas",value:simCharts.foranea,fill:"#C62828"},{name:"Virtual",value:simCharts.virtual,fill:"#455A64"}].filter(d=>d.value>0)} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={90} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={true} style={{fontSize:11}}>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart margin={{top:8, right:8, bottom:8, left:8}}>
+                      <Pie data={[{name:"Local (MEX)",value:simCharts.local,fill:"#2E7D32"},{name:"Foráneas",value:simCharts.foranea,fill:"#C62828"},{name:"Virtual",value:simCharts.virtual,fill:"#455A64"}].filter(d=>d.value>0)} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={94} paddingAngle={2} stroke="#fff" strokeWidth={2} label={({percent})=>`${(percent*100).toFixed(0)}%`} labelLine={false} style={PIE_LABEL_STYLE} isAnimationActive={false}>
                         {[{name:"Local (MEX)",value:simCharts.local,fill:"#2E7D32"},{name:"Foráneas",value:simCharts.foranea,fill:"#C62828"},{name:"Virtual",value:simCharts.virtual,fill:"#455A64"}].filter(d=>d.value>0).map(d=>(<Cell key={d.name} fill={d.fill}/>))}
-                      </Pie><Tooltip/><Legend/>
+                      </Pie><Tooltip content={<ChartTooltip/>}/><Legend iconType="circle" wrapperStyle={{fontSize:12}}/>
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -1683,14 +1727,14 @@ export default function Colorigrama() {
                   {showTitularidadesChart && (<>
                   <p style={{ fontSize:11, color:"#888", marginBottom:14 }}>Sesiones asignadas a cada profesor cuyo <strong>Programa Padre</strong> es MEDEX o Máster. <strong>Con CF</strong> cuenta todas; <strong>Sin CF</strong> excluye las sesiones cuyo <em>Curso</em> es Contabilidad Financiera (PROP CF). Responde a los filtros de abajo.</p>
                   {titularidadesChart.length>0 ? (
-                    <ResponsiveContainer width="100%" height={Math.max(280, titularidadesChart.length*44)}>
-                      <BarChart data={titularidadesChart} layout="vertical" margin={{left:50,right:44}} barGap={2}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#eee"/>
-                        <XAxis type="number" allowDecimals={false} style={{fontSize:11}}/>
-                        <YAxis type="category" dataKey="name" width={80} style={{fontSize:11}}/>
-                        <Tooltip/><Legend wrapperStyle={{fontSize:11}}/>
-                        <Bar dataKey="conCF" name="Con Contabilidad Financiera (PROP CF)" fill={IPADE.gold} radius={[0,4,4,0]}><LabelList dataKey="conCF" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/></Bar>
-                        <Bar dataKey="sinCF" name="Sin Contabilidad Financiera" fill={IPADE.navy} radius={[0,4,4,0]}><LabelList dataKey="sinCF" position="right" style={{fontSize:11, fontWeight:600, fill:"#333"}}/></Bar>
+                    <ResponsiveContainer width="100%" height={Math.max(280, titularidadesChart.length*52)}>
+                      <BarChart data={titularidadesChart} layout="vertical" margin={{left:8,right:48,top:4,bottom:4}} barGap={3} barCategoryGap="26%">
+                        <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false}/>
+                        <XAxis type="number" allowDecimals={false} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                        <YAxis type="category" dataKey="name" width={86} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+                        <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/><Legend iconType="circle" wrapperStyle={{fontSize:12}}/>
+                        <Bar dataKey="conCF" name="Con Contabilidad Financiera (PROP CF)" fill={IPADE.gold} radius={[0,5,5,0]} maxBarSize={18}><LabelList dataKey="conCF" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/></Bar>
+                        <Bar dataKey="sinCF" name="Sin Contabilidad Financiera" fill={IPADE.navy} radius={[0,5,5,0]} maxBarSize={18}><LabelList dataKey="sinCF" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/></Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   ) : <p style={{color:"#999",fontSize:13,textAlign:"center",padding:40}}>Sin titularidades de MEDEX o Máster con los filtros actuales</p>}
