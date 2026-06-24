@@ -806,6 +806,7 @@ export default function Colorigrama() {
   const [simSortCol, setSimSortCol] = useState("_fecha");
   const [simSortDir, setSimSortDir] = useState("asc");
   const [simStatus, setSimStatus] = useState("");
+  const [showTitularidadesChart, setShowTitularidadesChart] = useState(true);
   const simFileRef = useRef();
 
   const handleFile = useCallback((e) => {
@@ -1608,7 +1609,16 @@ export default function Colorigrama() {
                   </ResponsiveContainer>
                 </div>
                 <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", gridColumn:"1 / -1" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:4 }}>Titularidades por Profesor (MEDEX y Máster)</h3>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap", marginBottom:4 }}>
+                    <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, margin:0 }}>Titularidades por Profesor (MEDEX y Máster)</h3>
+                    <button onClick={()=>setShowTitularidadesChart(v=>!v)} aria-expanded={showTitularidadesChart} style={{ display:"inline-flex", alignItems:"center", gap:7, fontSize:11, padding:"5px 12px", background:showTitularidadesChart?"transparent":IPADE.gold, color:showTitularidadesChart?IPADE.navy:IPADE.darkNavy, border:`1px solid ${IPADE.gold}`, borderRadius:5, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>
+                      {showTitularidadesChart ? "Ocultar gráfica" : "Mostrar gráfica"}
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transform:showTitularidadesChart?"rotate(180deg)":"rotate(0deg)", transition:"transform .2s ease" }}>
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                  </div>
+                  {showTitularidadesChart && (<>
                   <p style={{ fontSize:11, color:"#888", marginBottom:14 }}>Sesiones asignadas a cada profesor cuyo <strong>Programa Padre</strong> es MEDEX o Máster. <strong>Con CF</strong> cuenta todas; <strong>Sin CF</strong> excluye las sesiones cuyo <em>Curso</em> es Contabilidad Financiera (PROP CF). Responde a los filtros de abajo.</p>
                   {titularidadesChart.length>0 ? (
                     <ResponsiveContainer width="100%" height={Math.max(280, titularidadesChart.length*44)}>
@@ -1622,6 +1632,7 @@ export default function Colorigrama() {
                       </BarChart>
                     </ResponsiveContainer>
                   ) : <p style={{color:"#999",fontSize:13,textAlign:"center",padding:40}}>Sin titularidades de MEDEX o Máster con los filtros actuales</p>}
+                  </>)}
                 </div>
               </div>
             )}
