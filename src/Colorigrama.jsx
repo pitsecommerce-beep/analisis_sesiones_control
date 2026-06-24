@@ -92,6 +92,12 @@ function excelTimeToStr(t) {
   const totalMin = Math.round(t * 24 * 60);
   return `${String(Math.floor(totalMin / 60)).padStart(2,"0")}:${String(totalMin % 60).padStart(2,"0")}`;
 }
+// Convierte "HH:MM" a minutos desde medianoche; null si no es válido.
+function hhmmToMin(s) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || "").trim());
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
 function fmtDate(d) {
   if (!d) return "";
   return d.toLocaleDateString("es-MX", { day:"2-digit", month:"2-digit", year:"numeric" });
@@ -1024,10 +1030,18 @@ export default function Colorigrama() {
   // Si no hay profesor asignado para ese programa, devuelve "" (queda en blanco) para
   // señalar que todavía hace falta asignarle profesor.
   const resolveSimProf = useCallback((r) => {
+    const esCF = SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase());
+    // PROP CF: si la sesión dura menos de 15 minutos (Hora fin − Hora inicio) no se asigna profesor.
+    if (esCF) {
+      const ini = hhmmToMin(r._horaInicio), fin = hhmmToMin(r._horaFin);
+      if (ini != null && fin != null && fin - ini >= 0 && fin - ini < 15) {
+        return { prof: "", rol: "PROP CF (<15 min)" };
+      }
+    }
     // PROP CF con asignación GLOBAL (profesor único) sólo aplica cuando el Programa es X1.
     // En cualquier otro caso (p. ej. R0) las sesiones de Contabilidad Financiera se reparten
     // como todas las demás: por Id de Programa y el profesor asignado ahí (60/40 o X5).
-    if (SPECIAL_CF_SET.has(String(r._curso || "").toUpperCase()) && isX1Program(r._programa)) {
+    if (esCF && isX1Program(r._programa)) {
       return { prof: simLookup.propCfProf || "", rol: "PROP CF" };
     }
     const cfg = simLookup.byProg[r._idPrograma];
