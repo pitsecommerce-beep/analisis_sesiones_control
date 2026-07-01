@@ -850,6 +850,8 @@ export default function Colorigrama() {
   const [simSortDir, setSimSortDir] = useState("asc");
   const [simStatus, setSimStatus] = useState("");
   const [showTitularidadesChart, setShowTitularidadesChart] = useState(true);
+  const [balanceObjetivo, setBalanceObjetivo] = useState({});
+  const [showBalancePanel, setShowBalancePanel] = useState(false);
   const simFileRef = useRef();
 
   const handleFile = useCallback((e) => {
@@ -1218,6 +1220,124 @@ export default function Colorigrama() {
       .map(name => ({ name, conCF: conCF[name] || 0, sinCF: sinCF[name] || 0 }))
       .sort((a, b) => b.conCF - a.conCF || b.sinCF - a.sinCF);
   }, [simFiltered]);
+
+  // Lista consistente de profesores desde la plantilla de titularidades
+  const simProfList = useMemo(() => {
+    const profs = new Set();
+    simConfig.forEach(c => {
+      const t = String(c.titular || "").trim();
+      const d = String(c.dupla || "").trim();
+      if (t && t.toUpperCase() !== PROP_CF_LABEL) profs.add(t);
+      if (d && d.toUpperCase() !== PROP_CF_LABEL) profs.add(d);
+    });
+    return [...profs].sort();
+  }, [simConfig]);
+
+  // Chart 1: Titularidades Foráneas y Locales (desde simConfig, por ID de programa)
+  const titForaneasLocalesData = useMemo(() => {
+    const LOCAL_KW = ["MEX", "BLD", "VIRTUAL"];
+    const isLocalProg = (prog) => {
+      const p = String(prog || "").toUpperCase();
+      return LOCAL_KW.some(k => p.includes(k));
+    };
+    const foranea = {}, local = {};
+    simConfig.forEach(c => {
+      const prog = String(c.programa || "").trim();
+      if (!prog || prog.toUpperCase() === PROP_CF_LABEL) return;
+      const loc = isLocalProg(prog);
+      [c.titular, c.dupla].forEach(prof => {
+        const p = String(prof || "").trim();
+        if (!p) return;
+        if (loc) local[p] = (local[p] || 0) + 1;
+        else foranea[p] = (foranea[p] || 0) + 1;
+      });
+    });
+    return simProfList.map(name => ({ name, "Foránea": foranea[name] || 0, "Local": local[name] || 0 }));
+  }, [simConfig, simProfList]);
+
+  // Chart 2: Total de sesiones Alta Dirección (desde sesiones filtradas)
+  const sesAltaDireccionData = useMemo(() => {
+    const ad1 = {}, ad2 = {};
+    simFiltered.forEach(r => {
+      const prof = r._profSim;
+      if (!prof) return;
+      const curso = normKey(r._curso);
+      if (curso === normKey("Alta Dirección")) ad1[prof] = (ad1[prof] || 0) + 1;
+      else if (curso === normKey("Alta Dirección 2")) ad2[prof] = (ad2[prof] || 0) + 1;
+    });
+    return simProfList.map(name => ({
+      name,
+      "Alta Dirección": ad1[name] || 0,
+      "Alta Dirección 2": ad2[name] || 0,
+      "TOTAL ALTA DIRECCIÓN": (ad1[name] || 0) + (ad2[name] || 0),
+    }));
+  }, [simFiltered, simProfList]);
+
+  // Chart 3: Titularidades MEDE MEDEX (desde simConfig, programas donde progPadre es MEDEX o Máster)
+  const titMedeMedexData = useMemo(() => {
+    const PADRE_OK = new Set(["MEDEX", "MASTER"]);
+    const medex = {}, master = {};
+    simConfig.forEach(c => {
+      const prog = String(c.programa || "").trim();
+      if (!prog || prog.toUpperCase() === PROP_CF_LABEL) return;
+      const padre = normKey(c.progPadre);
+      if (!PADRE_OK.has(padre)) return;
+      const isMedex = padre === "MEDEX";
+      [c.titular, c.dupla].forEach(prof => {
+        const p = String(prof || "").trim();
+        if (!p) return;
+        if (isMedex) medex[p] = (medex[p] || 0) + 1;
+        else master[p] = (master[p] || 0) + 1;
+      });
+    });
+    return simProfList.map(name => ({
+      name,
+      MEDEX: medex[name] || 0,
+      "Máster": master[name] || 0,
+      TOTAL: (medex[name] || 0) + (master[name] || 0),
+    }));
+  }, [simConfig, simProfList]);
+
+  // Chart 4: Titularidades MEDE MEDEX sin CF (excluye programas cuyo Curso sea PROP CF)
+  const titMedeMedexSinCFData = useMemo(() => {
+    const PADRE_OK = new Set(["MEDEX", "MASTER"]);
+    const medex = {}, master = {};
+    simConfig.forEach(c => {
+      const prog = String(c.programa || "").trim();
+      if (!prog || prog.toUpperCase() === PROP_CF_LABEL) return;
+      if (SPECIAL_CF_SET.has(String(c.curso || "").toUpperCase())) return;
+      const padre = normKey(c.progPadre);
+      if (!PADRE_OK.has(padre)) return;
+      const isMedex = padre === "MEDEX";
+      [c.titular, c.dupla].forEach(prof => {
+        const p = String(prof || "").trim();
+        if (!p) return;
+        if (isMedex) medex[p] = (medex[p] || 0) + 1;
+        else master[p] = (master[p] || 0) + 1;
+      });
+    });
+    return simProfList.map(name => ({
+      name,
+      MEDEX: medex[name] || 0,
+      "Máster": master[name] || 0,
+      TOTAL: (medex[name] || 0) + (master[name] || 0),
+    }));
+  }, [simConfig, simProfList]);
+
+  // Chart 5: Total de sesiones por Profesor (desde sesiones filtradas + Balance Objetivo)
+  const sesTotalProfData = useMemo(() => {
+    const count = {};
+    simFiltered.forEach(r => {
+      const prof = r._profSim;
+      if (!prof) return;
+      count[prof] = (count[prof] || 0) + 1;
+    });
+    return simProfList.map(name => ({
+      name,
+      TOTAL: count[name] || 0,
+      "BALANCE OBJETIVO": balanceObjetivo[name] || 0,
+    }));
+  }, [simFiltered, simProfList, balanceObjetivo]);
 
   const simDateBounds = useMemo(() => {
     if (!simulatedAll.length) return { min: "", max: "" };
@@ -1666,82 +1786,153 @@ export default function Colorigrama() {
             </div>
 
             {/* ─ Gráficos de simulación ─ */}
-            {simConfig.length>0 && (
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(340px, 1fr))", gap:20, marginBottom:24 }}>
-                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor</h3>
-                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profData.length*34)}>
-                    <BarChart data={simCharts.profData} layout="vertical" margin={{left:8,right:44,top:4,bottom:4}} barCategoryGap="22%">
-                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false}/>
-                      <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false}/>
-                      <YAxis type="category" dataKey="name" width={78} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
+            {simConfig.length>0 && (<>
+              {/* ── Balance Objetivo por Profesor ── */}
+              <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 2px 8px rgba(0,0,0,.06)", padding:"12px 18px", marginBottom:20 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:12, cursor:"pointer" }} onClick={()=>setShowBalancePanel(v=>!v)}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, margin:0 }}>Balance Objetivo por Profesor</h3>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={IPADE.navy} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transform:showBalancePanel?"rotate(180deg)":"rotate(0deg)", transition:"transform .2s ease" }}><polyline points="6 9 12 15 18 9" /></svg>
+                  <span style={{ fontSize:11, color:"#999" }}>Configura la meta de sesiones por profesor</span>
+                </div>
+                {showBalancePanel && (
+                  <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginTop:12, paddingTop:10, borderTop:"1px solid #f0efea" }}>
+                    {simProfList.map(prof => (
+                      <div key={prof} style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <ColorDot color={profColors[prof]||IPADE.accent1} size={8}/>
+                        <span style={{ fontSize:12, fontWeight:600, minWidth:36, color:IPADE.navy }}>{prof}</span>
+                        <input type="number" min="0" value={balanceObjetivo[prof] ?? ""} placeholder="0"
+                          onChange={e=>setBalanceObjetivo(prev=>({...prev,[prof]:Number(e.target.value)||0}))}
+                          style={{ width:56, fontSize:12, padding:"3px 6px", borderRadius:4, border:"1px solid #d0d0d0", textAlign:"center" }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Grid de gráficas 2×2 + gráfica extra ── */}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(2, 1fr)", gap:20, marginBottom:24 }}>
+                {/* 1. Titularidades Foráneas y Locales */}
+                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Titularidades Foráneas y Locales</h3>
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart data={titForaneasLocalesData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="28%" barGap={2}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
+                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
                       <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
-                      <Bar dataKey="value" radius={[0,6,6,0]} maxBarSize={26}><LabelList dataKey="value" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/>{simCharts.profData.map(d=>(<Cell key={d.name} fill={profColors[d.name]||IPADE.accent1}/>))}</Bar>
+                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
+                      <Bar dataKey="Foránea" fill="#37474F" radius={[3,3,0,0]} maxBarSize={30}>
+                        <LabelList dataKey="Foránea" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
+                      <Bar dataKey="Local" fill="#E65100" radius={[3,3,0,0]} maxBarSize={30}>
+                        <LabelList dataKey="Local" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor por Sede</h3>
-                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profSedeData.length*34)}>
-                    <BarChart data={simCharts.profSedeData} layout="vertical" margin={{left:8,right:44,top:4,bottom:4}} barCategoryGap="22%">
-                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false}/>
-                      <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false}/>
-                      <YAxis type="category" dataKey="name" width={78} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
-                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/><Legend iconType="circle" wrapperStyle={{fontSize:11}}/>
-                      {simCharts.sedeKeys.map((s,i)=>(<Bar key={s} dataKey={s} stackId="a" fill={sedeColors[s]||"#999"} maxBarSize={26}>{i===simCharts.sedeKeys.length-1 && <LabelList dataKey="_total" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/>}</Bar>))}
+
+                {/* 2. Total de Sesiones Alta Dirección */}
+                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Total de Sesiones Alta Dirección</h3>
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart data={sesAltaDireccionData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="22%" barGap={2}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
+                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
+                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
+                      <Bar dataKey="Alta Dirección" fill="#37474F" radius={[3,3,0,0]} maxBarSize={26}>
+                        <LabelList dataKey="Alta Dirección" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
+                      <Bar dataKey="Alta Dirección 2" fill="#E65100" radius={[3,3,0,0]} maxBarSize={26}>
+                        <LabelList dataKey="Alta Dirección 2" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
+                      <Bar dataKey="TOTAL ALTA DIRECCIÓN" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={26}>
+                        <LabelList dataKey="TOTAL ALTA DIRECCIÓN" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Sesiones por Profesor por Programa</h3>
-                  <ResponsiveContainer width="100%" height={Math.max(260, simCharts.profProgramaData.length*34)}>
-                    <BarChart data={simCharts.profProgramaData} layout="vertical" margin={{left:8,right:44,top:4,bottom:4}} barCategoryGap="22%">
-                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false}/>
-                      <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false}/>
-                      <YAxis type="category" dataKey="name" width={78} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
-                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/><Legend iconType="circle" wrapperStyle={{fontSize:11}}/>
-                      {simCharts.padreKeys.map((p,i)=>(<Bar key={p} dataKey={p} stackId="a" fill={progColors[p]||"#999"} maxBarSize={26}>{i===simCharts.padreKeys.length-1 && <LabelList dataKey="_total" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/>}</Bar>))}
+
+                {/* 3. Titularidades MEDE MEDEX */}
+                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Titularidades MEDE MEDEX</h3>
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart data={titMedeMedexData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="22%" barGap={2}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
+                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
+                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
+                      <Bar dataKey="MEDEX" fill="#37474F" radius={[3,3,0,0]} maxBarSize={26}>
+                        <LabelList dataKey="MEDEX" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
+                      <Bar dataKey="Máster" fill="#E65100" radius={[3,3,0,0]} maxBarSize={26}>
+                        <LabelList dataKey="Máster" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
+                      <Bar dataKey="TOTAL" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={26}>
+                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, marginBottom:14 }}>Foráneas vs. Local (MEX) vs. Virtual</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart margin={{top:8, right:8, bottom:8, left:8}}>
-                      <Pie data={[{name:"Local (MEX)",value:simCharts.local,fill:"#2E7D32"},{name:"Foráneas",value:simCharts.foranea,fill:"#C62828"},{name:"Virtual",value:simCharts.virtual,fill:"#455A64"}].filter(d=>d.value>0)} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={94} paddingAngle={2} stroke="#fff" strokeWidth={2} label={({percent})=>`${(percent*100).toFixed(0)}%`} labelLine={false} style={PIE_LABEL_STYLE} isAnimationActive={false}>
-                        {[{name:"Local (MEX)",value:simCharts.local,fill:"#2E7D32"},{name:"Foráneas",value:simCharts.foranea,fill:"#C62828"},{name:"Virtual",value:simCharts.virtual,fill:"#455A64"}].filter(d=>d.value>0).map(d=>(<Cell key={d.name} fill={d.fill}/>))}
-                      </Pie><Tooltip content={<ChartTooltip/>}/><Legend iconType="circle" wrapperStyle={{fontSize:12}}/>
-                    </PieChart>
+
+                {/* 4. Total de Sesiones por Profesor */}
+                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Total de Sesiones por Profesor</h3>
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart data={sesTotalProfData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="28%" barGap={2}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
+                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
+                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
+                      <Bar dataKey="TOTAL" fill="#37474F" radius={[3,3,0,0]} maxBarSize={30}>
+                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
+                      <Bar dataKey="BALANCE OBJETIVO" fill="#E65100" radius={[3,3,0,0]} maxBarSize={30}>
+                        <LabelList dataKey="BALANCE OBJETIVO" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", gridColumn:"1 / -1" }}>
+
+                {/* 5. Titularidades MEDE MEDEX sin CF (full width) */}
+                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", gridColumn:"1 / -1" }}>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap", marginBottom:4 }}>
-                    <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:16, margin:0 }}>Titularidades por Profesor (MEDEX y Máster)</h3>
+                    <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, margin:0, color:IPADE.navy }}>Titularidades MEDE MEDEX sin CF</h3>
                     <button onClick={()=>setShowTitularidadesChart(v=>!v)} aria-expanded={showTitularidadesChart} style={{ display:"inline-flex", alignItems:"center", gap:7, fontSize:11, padding:"5px 12px", background:showTitularidadesChart?"transparent":IPADE.gold, color:showTitularidadesChart?IPADE.navy:IPADE.darkNavy, border:`1px solid ${IPADE.gold}`, borderRadius:5, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>
                       {showTitularidadesChart ? "Ocultar gráfica" : "Mostrar gráfica"}
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transform:showTitularidadesChart?"rotate(180deg)":"rotate(0deg)", transition:"transform .2s ease" }}>
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transform:showTitularidadesChart?"rotate(180deg)":"rotate(0deg)", transition:"transform .2s ease" }}><polyline points="6 9 12 15 18 9" /></svg>
                     </button>
                   </div>
                   {showTitularidadesChart && (<>
-                  <p style={{ fontSize:11, color:"#888", marginBottom:14 }}>Sesiones asignadas a cada profesor cuyo <strong>Programa Padre</strong> es MEDEX o Máster. <strong>Con CF</strong> cuenta todas; <strong>Sin CF</strong> excluye las sesiones cuyo <em>Curso</em> es Contabilidad Financiera (PROP CF). Responde a los filtros de abajo.</p>
-                  {titularidadesChart.length>0 ? (
-                    <ResponsiveContainer width="100%" height={Math.max(280, titularidadesChart.length*52)}>
-                      <BarChart data={titularidadesChart} layout="vertical" margin={{left:8,right:48,top:4,bottom:4}} barGap={3} barCategoryGap="26%">
-                        <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false}/>
-                        <XAxis type="number" allowDecimals={false} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
-                        <YAxis type="category" dataKey="name" width={86} tick={AXIS_TICK} axisLine={false} tickLine={false}/>
-                        <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/><Legend iconType="circle" wrapperStyle={{fontSize:12}}/>
-                        <Bar dataKey="conCF" name="Con Contabilidad Financiera (PROP CF)" fill={IPADE.gold} radius={[0,5,5,0]} maxBarSize={18}><LabelList dataKey="conCF" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/></Bar>
-                        <Bar dataKey="sinCF" name="Sin Contabilidad Financiera" fill={IPADE.navy} radius={[0,5,5,0]} maxBarSize={18}><LabelList dataKey="sinCF" position="right" style={{fontSize:12, fontWeight:700, fill:"#333"}}/></Bar>
+                  <p style={{ fontSize:11, color:"#888", marginBottom:14 }}>Programas asignados a cada profesor cuyo <strong>Programa Padre</strong> es MEDEX o Máster, <strong>excluyendo</strong> los programas cuyo Curso sea Contabilidad Financiera (PROP CF).</p>
+                  {titMedeMedexSinCFData.some(d=>d.TOTAL>0) ? (
+                    <ResponsiveContainer width="100%" height={320}>
+                      <BarChart data={titMedeMedexSinCFData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="22%" barGap={2}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
+                        <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                        <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
+                        <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
+                        <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
+                        <Bar dataKey="MEDEX" fill="#37474F" radius={[3,3,0,0]} maxBarSize={26}>
+                          <LabelList dataKey="MEDEX" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                        </Bar>
+                        <Bar dataKey="Máster" fill="#E65100" radius={[3,3,0,0]} maxBarSize={26}>
+                          <LabelList dataKey="Máster" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                        </Bar>
+                        <Bar dataKey="TOTAL" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={26}>
+                          <LabelList dataKey="TOTAL" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
-                  ) : <p style={{color:"#999",fontSize:13,textAlign:"center",padding:40}}>Sin titularidades de MEDEX o Máster con los filtros actuales</p>}
+                  ) : <p style={{color:"#999",fontSize:13,textAlign:"center",padding:40}}>Sin titularidades de MEDEX o Máster (sin CF) con la configuración actual</p>}
                   </>)}
                 </div>
               </div>
-            )}
+            </>)}
 
             {/* ─ Filtros de la tabla simulada ─ */}
             <div style={{ background:"#fff", borderRadius:12, boxShadow:"0 2px 8px rgba(0,0,0,.06)", padding:"10px 16px", marginBottom:14, display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
