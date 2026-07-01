@@ -850,7 +850,7 @@ export default function Colorigrama() {
   const [simSortDir, setSimSortDir] = useState("asc");
   const [simStatus, setSimStatus] = useState("");
   const [showTitularidadesChart, setShowTitularidadesChart] = useState(true);
-  const [balanceObjetivo, setBalanceObjetivo] = useState({});
+  const [balanceObjetivo, setBalanceObjetivo] = useState({ JSG:100, AAM:120, VTP:120, JRMC:100, AJGO:80, ACFZ:50 });
   const [showBalancePanel, setShowBalancePanel] = useState(false);
   const simFileRef = useRef();
 
