@@ -1255,12 +1255,17 @@ export default function Colorigrama() {
     return simProfList.map(name => ({ name, "Foránea": foranea[name] || 0, "Local": local[name] || 0 }));
   }, [simConfig, simProfList]);
 
-  // Chart 2: Total de sesiones Alta Dirección (desde sesiones filtradas)
+  // Chart 2: Total de sesiones Alta Dirección
+  // Filtra: Programa Padre = "Perfeccionamiento" y Programa NO contenga "D1".
+  // Divide por Curso en "Alta Dirección" y "Alta Dirección 2"; TOTAL = todas las que pasan el filtro.
   const sesAltaDireccionData = useMemo(() => {
-    const ad1 = {}, ad2 = {};
+    const ad1 = {}, ad2 = {}, total = {};
     simFiltered.forEach(r => {
       const prof = r._profSim;
       if (!prof) return;
+      if (normKey(r._progPadre) !== normKey("Perfeccionamiento")) return;
+      if (String(r._programa || "").toUpperCase().includes("D1")) return;
+      total[prof] = (total[prof] || 0) + 1;
       const curso = normKey(r._curso);
       if (curso === normKey("Alta Dirección")) ad1[prof] = (ad1[prof] || 0) + 1;
       else if (curso === normKey("Alta Dirección 2")) ad2[prof] = (ad2[prof] || 0) + 1;
@@ -1269,7 +1274,7 @@ export default function Colorigrama() {
       name,
       "Alta Dirección": ad1[name] || 0,
       "Alta Dirección 2": ad2[name] || 0,
-      "TOTAL ALTA DIRECCIÓN": (ad1[name] || 0) + (ad2[name] || 0),
+      "TOTAL ALTA DIRECCIÓN": total[name] || 0,
     }));
   }, [simFiltered, simProfList]);
 
@@ -1878,37 +1883,9 @@ export default function Colorigrama() {
                   </ResponsiveContainer>
                 </div>
 
-                {/* 4. Total de Sesiones por Profesor */}
+                {/* 4. Titularidades MEDE MEDEX sin CF */}
                 <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Total de Sesiones por Profesor</h3>
-                  <ResponsiveContainer width="100%" height={320}>
-                    <BarChart data={sesTotalProfData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="28%" barGap={2}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
-                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
-                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
-                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
-                      <Bar dataKey="TOTAL" fill="#37474F" radius={[3,3,0,0]} maxBarSize={30}>
-                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
-                      </Bar>
-                      <Bar dataKey="BALANCE OBJETIVO" fill="#E65100" radius={[3,3,0,0]} maxBarSize={30}>
-                        <LabelList dataKey="BALANCE OBJETIVO" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* 5. Titularidades MEDE MEDEX sin CF (full width) */}
-                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", gridColumn:"1 / -1" }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap", marginBottom:4 }}>
-                    <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, margin:0, color:IPADE.navy }}>Titularidades MEDE MEDEX sin CF</h3>
-                    <button onClick={()=>setShowTitularidadesChart(v=>!v)} aria-expanded={showTitularidadesChart} style={{ display:"inline-flex", alignItems:"center", gap:7, fontSize:11, padding:"5px 12px", background:showTitularidadesChart?"transparent":IPADE.gold, color:showTitularidadesChart?IPADE.navy:IPADE.darkNavy, border:`1px solid ${IPADE.gold}`, borderRadius:5, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>
-                      {showTitularidadesChart ? "Ocultar gráfica" : "Mostrar gráfica"}
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transform:showTitularidadesChart?"rotate(180deg)":"rotate(0deg)", transition:"transform .2s ease" }}><polyline points="6 9 12 15 18 9" /></svg>
-                    </button>
-                  </div>
-                  {showTitularidadesChart && (<>
-                  <p style={{ fontSize:11, color:"#888", marginBottom:14 }}>Programas asignados a cada profesor cuyo <strong>Programa Padre</strong> es MEDEX o Máster, <strong>excluyendo</strong> los programas cuyo Curso sea Contabilidad Financiera (PROP CF).</p>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Titularidades MEDE MEDEX sin CF</h3>
                   {titMedeMedexSinCFData.some(d=>d.TOTAL>0) ? (
                     <ResponsiveContainer width="100%" height={320}>
                       <BarChart data={titMedeMedexSinCFData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="22%" barGap={2}>
@@ -1929,7 +1906,26 @@ export default function Colorigrama() {
                       </BarChart>
                     </ResponsiveContainer>
                   ) : <p style={{color:"#999",fontSize:13,textAlign:"center",padding:40}}>Sin titularidades de MEDEX o Máster (sin CF) con la configuración actual</p>}
-                  </>)}
+                </div>
+
+                {/* 5. Total de Sesiones por Profesor */}
+                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", gridColumn:"1 / -1" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Total de Sesiones por Profesor</h3>
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart data={sesTotalProfData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="28%" barGap={2}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
+                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
+                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
+                      <Bar dataKey="TOTAL" fill="#37474F" radius={[3,3,0,0]} maxBarSize={30}>
+                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
+                      <Bar dataKey="BALANCE OBJETIVO" fill="#E65100" radius={[3,3,0,0]} maxBarSize={30}>
+                        <LabelList dataKey="BALANCE OBJETIVO" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </>)}
