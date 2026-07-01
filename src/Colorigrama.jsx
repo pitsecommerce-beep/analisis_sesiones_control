@@ -1257,8 +1257,14 @@ export default function Colorigrama() {
 
   // Chart 2: Total de sesiones Alta Dirección
   // Filtra: Programa Padre = "Perfeccionamiento" y Programa NO contenga "D1".
-  // Divide por Curso en "Alta Dirección" y "Alta Dirección 2"; TOTAL = todas las que pasan el filtro.
+  // Cruza con Titularidades (simConfig) para saber si el ID de Programa
+  // corresponde a "Alta Dirección" o "Alta Dirección 2" según la columna Curso.
   const sesAltaDireccionData = useMemo(() => {
+    const progToCurso = {};
+    simConfig.forEach(c => {
+      const prog = String(c.programa || "").trim();
+      if (prog) progToCurso[prog] = String(c.curso || "").trim();
+    });
     const ad1 = {}, ad2 = {}, total = {};
     simFiltered.forEach(r => {
       const prof = r._profSim;
@@ -1266,9 +1272,9 @@ export default function Colorigrama() {
       if (normKey(r._progPadre) !== normKey("Perfeccionamiento")) return;
       if (String(r._programa || "").toUpperCase().includes("D1")) return;
       total[prof] = (total[prof] || 0) + 1;
-      const curso = normKey(r._curso);
-      if (curso === normKey("Alta Dirección")) ad1[prof] = (ad1[prof] || 0) + 1;
-      else if (curso === normKey("Alta Dirección 2")) ad2[prof] = (ad2[prof] || 0) + 1;
+      const cursoTit = normKey(progToCurso[r._idPrograma] || "");
+      if (cursoTit === normKey("Alta Dirección")) ad1[prof] = (ad1[prof] || 0) + 1;
+      else if (cursoTit === normKey("Alta Dirección 2")) ad2[prof] = (ad2[prof] || 0) + 1;
     });
     return simProfList.map(name => ({
       name,
@@ -1276,7 +1282,7 @@ export default function Colorigrama() {
       "Alta Dirección 2": ad2[name] || 0,
       "TOTAL ALTA DIRECCIÓN": total[name] || 0,
     }));
-  }, [simFiltered, simProfList]);
+  }, [simFiltered, simProfList, simConfig]);
 
   // Chart 3: Titularidades MEDE MEDEX (desde simConfig, programas donde progPadre es MEDEX o Máster)
   const titMedeMedexData = useMemo(() => {
@@ -1817,116 +1823,117 @@ export default function Colorigrama() {
 
               {/* ── Carrusel horizontal de gráficas ── */}
               <div style={{ display:"flex", gap:16, overflowX:"auto", paddingBottom:8, marginBottom:24, WebkitOverflowScrolling:"touch" }}>
-                {/* 1. Titularidades Foráneas y Locales */}
-                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:420, flex:"0 0 420px" }}>
+                {/* 1. Total de Sesiones por Profesor */}
+                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:520, flex:"0 0 520px" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:14, marginBottom:10, color:IPADE.navy }}>Total de Sesiones por Profesor</h3>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={sesTotalProfData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="28%" barGap={2}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
+                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
+                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
+                      <Bar dataKey="TOTAL" fill="#37474F" radius={[3,3,0,0]} maxBarSize={26}>
+                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
+                      <Bar dataKey="BALANCE OBJETIVO" fill="#E65100" radius={[3,3,0,0]} maxBarSize={26}>
+                        <LabelList dataKey="BALANCE OBJETIVO" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* 2. Titularidades Foráneas y Locales */}
+                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:520, flex:"0 0 520px" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:14, marginBottom:10, color:IPADE.navy }}>Titularidades Foráneas y Locales</h3>
-                  <ResponsiveContainer width="100%" height={240}>
+                  <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={titForaneasLocalesData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="28%" barGap={2}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
                       <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <YAxis tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
                       <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
                       <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
                       <Bar dataKey="Foránea" fill="#37474F" radius={[3,3,0,0]} maxBarSize={30}>
-                        <LabelList dataKey="Foránea" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
+                        <LabelList dataKey="Foránea" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
                       </Bar>
                       <Bar dataKey="Local" fill="#E65100" radius={[3,3,0,0]} maxBarSize={30}>
-                        <LabelList dataKey="Local" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
+                        <LabelList dataKey="Local" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
 
-                {/* 2. Total de Sesiones Alta Dirección */}
-                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:420, flex:"0 0 420px" }}>
+                {/* 3. Total de Sesiones Alta Dirección */}
+                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:520, flex:"0 0 520px" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:14, marginBottom:10, color:IPADE.navy }}>Total de Sesiones Alta Dirección</h3>
-                  <ResponsiveContainer width="100%" height={240}>
+                  <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={sesAltaDireccionData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="22%" barGap={2}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
-                      <XAxis dataKey="name" tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
                       <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
-                      <Legend iconType="square" wrapperStyle={{fontSize:10}}/>
-                      <Bar dataKey="Alta Dirección" fill="#37474F" radius={[3,3,0,0]} maxBarSize={20}>
-                        <LabelList dataKey="Alta Dirección" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
+                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
+                      <Bar dataKey="Alta Dirección" fill="#37474F" radius={[3,3,0,0]} maxBarSize={22}>
+                        <LabelList dataKey="Alta Dirección" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
                       </Bar>
-                      <Bar dataKey="Alta Dirección 2" fill="#E65100" radius={[3,3,0,0]} maxBarSize={20}>
-                        <LabelList dataKey="Alta Dirección 2" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
+                      <Bar dataKey="Alta Dirección 2" fill="#E65100" radius={[3,3,0,0]} maxBarSize={22}>
+                        <LabelList dataKey="Alta Dirección 2" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
                       </Bar>
-                      <Bar dataKey="TOTAL ALTA DIRECCIÓN" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={20}>
-                        <LabelList dataKey="TOTAL ALTA DIRECCIÓN" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
+                      <Bar dataKey="TOTAL ALTA DIRECCIÓN" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={22}>
+                        <LabelList dataKey="TOTAL ALTA DIRECCIÓN" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
 
-                {/* 3. Titularidades MEDE MEDEX */}
-                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:420, flex:"0 0 420px" }}>
+                {/* 4. Titularidades MEDE MEDEX */}
+                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:520, flex:"0 0 520px" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:14, marginBottom:10, color:IPADE.navy }}>Titularidades MEDE MEDEX</h3>
-                  <ResponsiveContainer width="100%" height={240}>
+                  <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={titMedeMedexData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="22%" barGap={2}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
-                      <XAxis dataKey="name" tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
                       <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
-                      <Legend iconType="square" wrapperStyle={{fontSize:10}}/>
-                      <Bar dataKey="MEDEX" fill="#37474F" radius={[3,3,0,0]} maxBarSize={20}>
-                        <LabelList dataKey="MEDEX" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
+                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
+                      <Bar dataKey="MEDEX" fill="#37474F" radius={[3,3,0,0]} maxBarSize={22}>
+                        <LabelList dataKey="MEDEX" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
                       </Bar>
-                      <Bar dataKey="Máster" fill="#E65100" radius={[3,3,0,0]} maxBarSize={20}>
-                        <LabelList dataKey="Máster" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
+                      <Bar dataKey="Máster" fill="#E65100" radius={[3,3,0,0]} maxBarSize={22}>
+                        <LabelList dataKey="Máster" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
                       </Bar>
-                      <Bar dataKey="TOTAL" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={20}>
-                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
+                      <Bar dataKey="TOTAL" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={22}>
+                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
 
-                {/* 4. Titularidades MEDE MEDEX sin CF */}
-                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:420, flex:"0 0 420px" }}>
+                {/* 5. Titularidades MEDE MEDEX sin CF */}
+                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:520, flex:"0 0 520px" }}>
                   <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:14, marginBottom:10, color:IPADE.navy }}>Titularidades MEDE MEDEX sin CF</h3>
                   {titMedeMedexSinCFData.some(d=>d.TOTAL>0) ? (
-                    <ResponsiveContainer width="100%" height={240}>
+                    <ResponsiveContainer width="100%" height={260}>
                       <BarChart data={titMedeMedexSinCFData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="22%" barGap={2}>
                         <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
-                        <XAxis dataKey="name" tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
-                        <YAxis tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
+                        <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                        <YAxis tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
                         <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
-                        <Legend iconType="square" wrapperStyle={{fontSize:10}}/>
-                        <Bar dataKey="MEDEX" fill="#37474F" radius={[3,3,0,0]} maxBarSize={20}>
-                          <LabelList dataKey="MEDEX" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
+                        <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
+                        <Bar dataKey="MEDEX" fill="#37474F" radius={[3,3,0,0]} maxBarSize={22}>
+                          <LabelList dataKey="MEDEX" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
                         </Bar>
-                        <Bar dataKey="Máster" fill="#E65100" radius={[3,3,0,0]} maxBarSize={20}>
-                          <LabelList dataKey="Máster" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
+                        <Bar dataKey="Máster" fill="#E65100" radius={[3,3,0,0]} maxBarSize={22}>
+                          <LabelList dataKey="Máster" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
                         </Bar>
-                        <Bar dataKey="TOTAL" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={20}>
-                          <LabelList dataKey="TOTAL" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
+                        <Bar dataKey="TOTAL" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={22}>
+                          <LabelList dataKey="TOTAL" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   ) : <p style={{color:"#999",fontSize:12,textAlign:"center",padding:24}}>Sin datos</p>}
                 </div>
 
-                {/* 5. Total de Sesiones por Profesor */}
-                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:420, flex:"0 0 420px" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:14, marginBottom:10, color:IPADE.navy }}>Total de Sesiones por Profesor</h3>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={sesTotalProfData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="28%" barGap={2}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
-                      <XAxis dataKey="name" tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
-                      <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
-                      <Legend iconType="square" wrapperStyle={{fontSize:10}}/>
-                      <Bar dataKey="TOTAL" fill="#37474F" radius={[3,3,0,0]} maxBarSize={24}>
-                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
-                      </Bar>
-                      <Bar dataKey="BALANCE OBJETIVO" fill="#E65100" radius={[3,3,0,0]} maxBarSize={24}>
-                        <LabelList dataKey="BALANCE OBJETIVO" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
               </div>
             </>)}
 
