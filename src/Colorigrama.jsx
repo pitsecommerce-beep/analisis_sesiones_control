@@ -50,11 +50,14 @@ function isX5Program(programa) {
 function isX1Program(programa) {
   return String(programa || "").toUpperCase().includes("X1");
 }
-/* Homologa, SOLO para la simulación, las variantes Virtual con su equivalente MEX:
-   "X1 Virtual R" → "X1 MEX R", "X4 Virtual R" → "X4 MEX R", "X5 Virtual R" → "X5 MEX R".
+/* Homologa, SOLO para la simulación, variantes Virtual y BLD con su equivalente MEX:
+   "X1 Virtual R" → "X1 MEX R", "X4 Virtual R" → "X4 MEX R", "X5 Virtual R" → "X5 MEX R",
+   "X4 BLD R" → "X4 MEX R".
    Son el mismo curso y comparten Titular y Dupla, así que se manejan como X{1,4,5} MEX R. */
 function canonicalSimId(idPrograma) {
-  return String(idPrograma || "").replace(/^(X[145])\s+Virtual\s+R$/i, "$1 MEX R");
+  return String(idPrograma || "")
+    .replace(/^(X[145])\s+Virtual\s+R$/i, "$1 MEX R")
+    .replace(/^(X4)\s+BLD\s+R$/i, "$1 MEX R");
 }
 // Devuelve true si, según el reparto X5, la secuencia corresponde a la Dupla (2-6).
 function isX5Dupla(secuencia) {
