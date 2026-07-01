@@ -1815,12 +1815,12 @@ export default function Colorigrama() {
                 )}
               </div>
 
-              {/* ── Grid de gráficas 2×2 + gráfica extra ── */}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(2, 1fr)", gap:20, marginBottom:24 }}>
+              {/* ── Carrusel horizontal de gráficas ── */}
+              <div style={{ display:"flex", gap:16, overflowX:"auto", paddingBottom:8, marginBottom:24, WebkitOverflowScrolling:"touch" }}>
                 {/* 1. Titularidades Foráneas y Locales */}
-                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Titularidades Foráneas y Locales</h3>
-                  <ResponsiveContainer width="100%" height={320}>
+                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:420, flex:"0 0 420px" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:14, marginBottom:10, color:IPADE.navy }}>Titularidades Foráneas y Locales</h3>
+                  <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={titForaneasLocalesData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="28%" barGap={2}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
                       <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
@@ -1838,91 +1838,91 @@ export default function Colorigrama() {
                 </div>
 
                 {/* 2. Total de Sesiones Alta Dirección */}
-                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Total de Sesiones Alta Dirección</h3>
-                  <ResponsiveContainer width="100%" height={320}>
+                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:420, flex:"0 0 420px" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:14, marginBottom:10, color:IPADE.navy }}>Total de Sesiones Alta Dirección</h3>
+                  <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={sesAltaDireccionData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="22%" barGap={2}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
-                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <XAxis dataKey="name" tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
                       <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
-                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
-                      <Bar dataKey="Alta Dirección" fill="#37474F" radius={[3,3,0,0]} maxBarSize={26}>
-                        <LabelList dataKey="Alta Dirección" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      <Legend iconType="square" wrapperStyle={{fontSize:10}}/>
+                      <Bar dataKey="Alta Dirección" fill="#37474F" radius={[3,3,0,0]} maxBarSize={20}>
+                        <LabelList dataKey="Alta Dirección" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
                       </Bar>
-                      <Bar dataKey="Alta Dirección 2" fill="#E65100" radius={[3,3,0,0]} maxBarSize={26}>
-                        <LabelList dataKey="Alta Dirección 2" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      <Bar dataKey="Alta Dirección 2" fill="#E65100" radius={[3,3,0,0]} maxBarSize={20}>
+                        <LabelList dataKey="Alta Dirección 2" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
                       </Bar>
-                      <Bar dataKey="TOTAL ALTA DIRECCIÓN" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={26}>
-                        <LabelList dataKey="TOTAL ALTA DIRECCIÓN" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      <Bar dataKey="TOTAL ALTA DIRECCIÓN" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={20}>
+                        <LabelList dataKey="TOTAL ALTA DIRECCIÓN" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
 
                 {/* 3. Titularidades MEDE MEDEX */}
-                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Titularidades MEDE MEDEX</h3>
-                  <ResponsiveContainer width="100%" height={320}>
+                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:420, flex:"0 0 420px" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:14, marginBottom:10, color:IPADE.navy }}>Titularidades MEDE MEDEX</h3>
+                  <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={titMedeMedexData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="22%" barGap={2}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
-                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <XAxis dataKey="name" tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
                       <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
-                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
-                      <Bar dataKey="MEDEX" fill="#37474F" radius={[3,3,0,0]} maxBarSize={26}>
-                        <LabelList dataKey="MEDEX" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      <Legend iconType="square" wrapperStyle={{fontSize:10}}/>
+                      <Bar dataKey="MEDEX" fill="#37474F" radius={[3,3,0,0]} maxBarSize={20}>
+                        <LabelList dataKey="MEDEX" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
                       </Bar>
-                      <Bar dataKey="Máster" fill="#E65100" radius={[3,3,0,0]} maxBarSize={26}>
-                        <LabelList dataKey="Máster" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      <Bar dataKey="Máster" fill="#E65100" radius={[3,3,0,0]} maxBarSize={20}>
+                        <LabelList dataKey="Máster" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
                       </Bar>
-                      <Bar dataKey="TOTAL" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={26}>
-                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                      <Bar dataKey="TOTAL" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={20}>
+                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
 
                 {/* 4. Titularidades MEDE MEDEX sin CF */}
-                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Titularidades MEDE MEDEX sin CF</h3>
+                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:420, flex:"0 0 420px" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:14, marginBottom:10, color:IPADE.navy }}>Titularidades MEDE MEDEX sin CF</h3>
                   {titMedeMedexSinCFData.some(d=>d.TOTAL>0) ? (
-                    <ResponsiveContainer width="100%" height={320}>
+                    <ResponsiveContainer width="100%" height={240}>
                       <BarChart data={titMedeMedexSinCFData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="22%" barGap={2}>
                         <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
-                        <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
-                        <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
+                        <XAxis dataKey="name" tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                        <YAxis tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
                         <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
-                        <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
-                        <Bar dataKey="MEDEX" fill="#37474F" radius={[3,3,0,0]} maxBarSize={26}>
-                          <LabelList dataKey="MEDEX" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                        <Legend iconType="square" wrapperStyle={{fontSize:10}}/>
+                        <Bar dataKey="MEDEX" fill="#37474F" radius={[3,3,0,0]} maxBarSize={20}>
+                          <LabelList dataKey="MEDEX" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
                         </Bar>
-                        <Bar dataKey="Máster" fill="#E65100" radius={[3,3,0,0]} maxBarSize={26}>
-                          <LabelList dataKey="Máster" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                        <Bar dataKey="Máster" fill="#E65100" radius={[3,3,0,0]} maxBarSize={20}>
+                          <LabelList dataKey="Máster" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
                         </Bar>
-                        <Bar dataKey="TOTAL" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={26}>
-                          <LabelList dataKey="TOTAL" position="top" style={{fontSize:10, fontWeight:700, fill:"#333"}}/>
+                        <Bar dataKey="TOTAL" fill="#2E7D32" radius={[3,3,0,0]} maxBarSize={20}>
+                          <LabelList dataKey="TOTAL" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
-                  ) : <p style={{color:"#999",fontSize:13,textAlign:"center",padding:40}}>Sin titularidades de MEDEX o Máster (sin CF) con la configuración actual</p>}
+                  ) : <p style={{color:"#999",fontSize:12,textAlign:"center",padding:24}}>Sin datos</p>}
                 </div>
 
                 {/* 5. Total de Sesiones por Profesor */}
-                <div style={{ background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", gridColumn:"1 / -1" }}>
-                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:15, marginBottom:14, color:IPADE.navy }}>Total de Sesiones por Profesor</h3>
-                  <ResponsiveContainer width="100%" height={320}>
+                <div style={{ background:"#fff", borderRadius:10, padding:"14px 16px", boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #f0efea", minWidth:420, flex:"0 0 420px" }}>
+                  <h3 style={{ fontFamily:"'DM Serif Display', serif", fontSize:14, marginBottom:10, color:IPADE.navy }}>Total de Sesiones por Profesor</h3>
+                  <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={sesTotalProfData} margin={{left:4,right:8,top:24,bottom:4}} barCategoryGap="28%" barGap={2}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false}/>
-                      <XAxis dataKey="name" tick={{fontSize:11, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <XAxis dataKey="name" tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={{fontSize:10, fill:"#5b6470"}} axisLine={false} tickLine={false} allowDecimals={false}/>
                       <Tooltip content={<ChartTooltip/>} cursor={{fill:"rgba(27,42,74,.05)"}}/>
-                      <Legend iconType="square" wrapperStyle={{fontSize:11}}/>
-                      <Bar dataKey="TOTAL" fill="#37474F" radius={[3,3,0,0]} maxBarSize={30}>
-                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
+                      <Legend iconType="square" wrapperStyle={{fontSize:10}}/>
+                      <Bar dataKey="TOTAL" fill="#37474F" radius={[3,3,0,0]} maxBarSize={24}>
+                        <LabelList dataKey="TOTAL" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
                       </Bar>
-                      <Bar dataKey="BALANCE OBJETIVO" fill="#E65100" radius={[3,3,0,0]} maxBarSize={30}>
-                        <LabelList dataKey="BALANCE OBJETIVO" position="top" style={{fontSize:11, fontWeight:700, fill:"#333"}}/>
+                      <Bar dataKey="BALANCE OBJETIVO" fill="#E65100" radius={[3,3,0,0]} maxBarSize={24}>
+                        <LabelList dataKey="BALANCE OBJETIVO" position="top" style={{fontSize:9, fontWeight:700, fill:"#333"}}/>
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
